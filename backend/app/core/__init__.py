@@ -8,6 +8,15 @@ from app.core.dependency_solver import (
     InvalidDependencyError,
     TaskNotFoundError,
 )
+from app.core.workflow_engine import (
+    VALID_TASK_TRANSITIONS,
+    CaseNotFoundError,
+    InvalidStateTransitionError,
+    WorkflowActivationError,
+    WorkflowEngine,
+    WorkflowEngineError,
+    WorkflowTaskNotFoundError,
+)
 from app.core.workflow_loader import WorkflowDefinitionError, WorkflowLoader
 from app.core.workflow_schema import (
     ApplicabilityRule,
@@ -19,6 +28,7 @@ from app.core.workflow_schema import (
 
 __all__ = [
     "ApplicabilityRule",
+    "CaseNotFoundError",
     "CyclicDependencyError",
     "DependencyGraph",
     "DependencySolver",
@@ -26,9 +36,15 @@ __all__ = [
     "DocumentProduced",
     "DocumentRequirement",
     "InvalidDependencyError",
+    "InvalidStateTransitionError",
     "TaskDefinition",
     "TaskNotFoundError",
+    "VALID_TASK_TRANSITIONS",
+    "WorkflowActivationError",
     "WorkflowDefinition",
     "WorkflowDefinitionError",
     "WorkflowLoader",
+    "WorkflowEngine",
+    "WorkflowEngineError",
+    "WorkflowTaskNotFoundError",
 ]
