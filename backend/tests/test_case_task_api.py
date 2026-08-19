@@ -83,7 +83,7 @@ async def test_case_and_task_api_integration(
     editable = Task(
         case_id=case_id,
         workflow_id="family_pension",
-        task_type="pension_application",
+        task_type="family_pension_application",
         status=TaskStatus.READY,
         title="Apply for family pension",
         input_data={"applicant": "Meera Rao"},
@@ -124,6 +124,14 @@ async def test_case_and_task_api_integration(
     detail = detail_response.json()
     assert detail["dependencies"][0]["depends_on_task_id"] == str(prerequisite.id)
     assert detail["produced_documents"][0]["document_type"] == "pension_application_draft"
+    assert detail["description"].startswith("Transfer a deceased Karnataka state pensioner")
+    assert {document["type"] for document in detail["required_documents"]} == {
+        "death_certificate",
+        "pension_payment_order",
+        "marriage_certificate",
+        "spouse_identity",
+        "bank_account_proof",
+    }
 
     patch_response = await client.patch(
         f"/api/cases/{case_id}/tasks/{editable.id}",

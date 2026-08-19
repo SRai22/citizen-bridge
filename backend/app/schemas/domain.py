@@ -52,6 +52,12 @@ class TaskDependencyRead(ORMReadModel):
     dependency_type: str
 
 
+class RequiredDocumentRead(BaseModel):
+    type: str
+    owner: str | None
+    description: str | None
+
+
 class ExternalApplicationRead(ORMReadModel):
     task_id: UUID
     adapter_type: str
@@ -99,6 +105,8 @@ class DocumentRead(ORMReadModel):
 
 
 class TaskDetailRead(TaskRead):
+    description: str | None = None
+    required_documents: list[RequiredDocumentRead] = Field(default_factory=list)
     produced_documents: list[DocumentRead] = Field(default_factory=list)
 
 
