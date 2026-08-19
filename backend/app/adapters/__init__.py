@@ -10,6 +10,7 @@ from app.adapters.base import (
 from app.adapters.bescom import BescomTransferAdapter
 from app.adapters.death_certificate import DeathCertificateAdapter
 from app.adapters.family_pension import FamilyPensionAdapter
+from app.adapters.legal_heir_certificate import LegalHeirCertificateAdapter
 from app.adapters.ration_card import RationCardAdapter
 from app.adapters.registry import ADAPTER_REGISTRY, UnknownAdapterError, get_adapter
 
@@ -21,6 +22,7 @@ __all__ = [
     "DeathCertificateAdapter",
     "FamilyPensionAdapter",
     "GovernmentAdapter",
+    "LegalHeirCertificateAdapter",
     "RationCardAdapter",
     "StatusResult",
     "SubmissionResult",

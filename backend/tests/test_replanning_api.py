@@ -3,7 +3,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
-from uuid import UUID
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -11,7 +10,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.ai import RejectionInterpreter
-from app.core import WorkflowEngine
 from app.db.session import create_database_engine, get_session, init_db
 from app.main import create_app
 from app.models import Case, CaseStatus, Document, Task, TaskDependency, TaskStatus
@@ -136,15 +134,48 @@ async def test_bescom_rejection_is_interpreted_and_replanned_idempotently(
     async with database_sessions() as session:
         assert await session.scalar(select(func.count()).select_from(Task)) == 3
         assert await session.scalar(select(func.count()).select_from(TaskDependency)) == 3
-        engine = WorkflowEngine(session)
-        legal_task = await session.get(Task, UUID(legal_task_id))
-        assert legal_task is not None
-        await engine.transition_task(legal_task.id, TaskStatus.IN_PROGRESS)
-        await engine.transition_task(legal_task.id, TaskStatus.SUBMITTED)
-        await engine.transition_task(legal_task.id, TaskStatus.COMPLETED)
-        persisted_bescom = await session.get(Task, bescom_task.id)
-        assert persisted_bescom is not None
-        assert persisted_bescom.status == TaskStatus.READY
+        session.add(
+            Document(
+                case_id=case.id,
+                document_type="aadhaar",
+                owner_name="Meera Rao",
+            )
+        )
+        await session.commit()
+
+    legal_input = await client.patch(
+        f"/api/cases/{case.id}/tasks/{legal_task_id}",
+        json={
+            "input_data": {
+                "deceased_name": "Arun Rao",
+                "legal_heirs": [
+                    {"name": "Meera Rao", "relationship": "wife"},
+                    {"name": "Kiran Rao", "relationship": "son"},
+                ],
+            }
+        },
+    )
+    assert legal_input.status_code == 200
+    legal_prepared = await client.post(f"/api/cases/{case.id}/tasks/{legal_task_id}/prepare")
+    assert legal_prepared.status_code == 200
+    legal_approved = await client.post(f"/api/approvals/{legal_prepared.json()['id']}/approve")
+    assert legal_approved.status_code == 200
+    assert legal_approved.json()["status"] == "approved"
+
+    bescom_prepared = await client.post(f"/api/cases/{case.id}/tasks/{bescom_task.id}/prepare")
+    assert bescom_prepared.status_code == 200
+    bescom_approved = await client.post(f"/api/approvals/{bescom_prepared.json()['id']}/approve")
+    assert bescom_approved.status_code == 200
+    assert bescom_approved.json()["status"] == "approved"
+
+    async with database_sessions() as session:
+        legal_certificate = await session.scalar(
+            select(Document).where(Document.document_type == "legal_heir_certificate")
+        )
+        assert legal_certificate is not None
+        assert legal_certificate.extracted_fields["issuing_authority"] == (
+            "Tahsildar, Bengaluru South"
+        )
 
 
 @pytest.mark.anyio
