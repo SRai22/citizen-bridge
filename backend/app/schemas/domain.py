@@ -98,6 +98,10 @@ class DocumentRead(ORMReadModel):
     metadata: dict[str, Any] = Field(validation_alias="metadata_")
 
 
+class TaskDetailRead(TaskRead):
+    produced_documents: list[DocumentRead] = Field(default_factory=list)
+
+
 class AuditEntryRead(ORMReadModel):
     case_id: UUID
     task_id: UUID | None
