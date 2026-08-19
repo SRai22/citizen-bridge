@@ -4,13 +4,14 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import SubmissionService
 from app.db.session import get_session
-from app.models import CaseStatus
+from app.models import CaseStatus, Document
 from app.repositories import CaseRepository
-from app.schemas import ApprovalRequestRead, CaseCreate, CaseRead
+from app.schemas import ApprovalRequestRead, CaseCreate, CaseRead, DocumentRead
 
 router = APIRouter(prefix="/api/cases", tags=["cases"])
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
@@ -34,6 +35,21 @@ async def get_case(
     if case is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
     return CaseRead.model_validate(case)
+
+
+@router.get("/{case_id}/documents", response_model=list[DocumentRead])
+async def list_case_documents(
+    case_id: UUID,
+    session: SessionDep,
+) -> list[DocumentRead]:
+    if not await CaseRepository(session).exists(case_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+    documents = await session.scalars(
+        select(Document)
+        .where(Document.case_id == case_id)
+        .order_by(Document.created_at, Document.id)
+    )
+    return [DocumentRead.model_validate(document) for document in documents.all()]
 
 
 @router.get("/{case_id}/approvals", response_model=list[ApprovalRequestRead])

@@ -1,7 +1,7 @@
 """Pydantic response shapes for persisted domain entities."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -56,6 +56,10 @@ class RequiredDocumentRead(BaseModel):
     type: str
     owner: str | None
     description: str | None
+
+
+class DocumentRequirementRead(RequiredDocumentRead):
+    status: Literal["satisfied", "missing"]
 
 
 class ExternalApplicationRead(ORMReadModel):

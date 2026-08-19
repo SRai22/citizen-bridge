@@ -111,5 +111,5 @@ async def test_prepare_api_reports_missing_documents(
 
     response = await client.post(f"/api/cases/{case.id}/tasks/{task.id}/prepare")
 
-    assert response.status_code == 409
-    assert "deceased_identity" in response.json()["detail"]
+    assert response.status_code == 422
+    assert response.json()["detail"]["missing_document_types"] == ["deceased_identity"]

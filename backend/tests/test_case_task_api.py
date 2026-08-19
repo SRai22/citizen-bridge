@@ -1,14 +1,16 @@
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.session import create_database_engine, get_session, init_db
 from app.main import create_app
-from app.models import Document, Task, TaskDependency, TaskStatus
+from app.models import Document, Task, TaskDependency, TaskStatus, VerificationStatus
 
 
 @pytest.fixture
@@ -178,3 +180,79 @@ async def test_case_task_api_errors_and_validation(
         json={"unexpected": "value"},
     )
     assert invalid_patch.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_death_certificate_satisfies_cross_workflow_requirements(
+    api_context: tuple[AsyncClient, async_sessionmaker[AsyncSession]],
+) -> None:
+    client, sessions = api_context
+    case_id = UUID(str((await create_case(client))["id"]))
+    tasks = [
+        Task(
+            case_id=case_id,
+            workflow_id=workflow_id,
+            task_type=task_type,
+            status=TaskStatus.READY,
+            title=title,
+        )
+        for workflow_id, task_type, title in (
+            ("family_pension", "family_pension_application", "Apply for family pension"),
+            ("bescom_transfer", "bescom_name_transfer", "Transfer BESCOM account"),
+            ("ration_card", "ration_card_modification", "Update ration card"),
+        )
+    ]
+    async with sessions() as session:
+        session.add_all(tasks)
+        await session.commit()
+
+    for task in tasks:
+        response = await client.get(f"/api/cases/{case_id}/tasks/{task.id}/requirements")
+        assert response.status_code == 200
+        death_certificate = next(
+            item for item in response.json() if item["type"] == "death_certificate"
+        )
+        assert death_certificate["status"] == "missing"
+
+    issued_at = datetime(2026, 8, 19, tzinfo=UTC)
+    async with sessions() as session:
+        session.add(
+            Document(
+                case_id=case_id,
+                document_type="death_certificate",
+                owner_name="Arun Rao",
+                issuer="BBMP South Zone",
+                issued_at=issued_at,
+                verification_status=VerificationStatus.VERIFIED,
+                extracted_fields={"registration_number": "BBMP/D/2026/00001"},
+            )
+        )
+        await session.commit()
+
+    for task in tasks:
+        response = await client.get(f"/api/cases/{case_id}/tasks/{task.id}/requirements")
+        assert response.status_code == 200
+        death_certificate = next(
+            item for item in response.json() if item["type"] == "death_certificate"
+        )
+        assert death_certificate["status"] == "satisfied"
+
+    documents = await client.get(f"/api/cases/{case_id}/documents")
+    assert documents.status_code == 200
+    document = documents.json()[0]
+    assert document["document_type"] == "death_certificate"
+    assert document["owner_name"] == "Arun Rao"
+    assert document["issuer"] == "BBMP South Zone"
+    assert document["issued_at"].startswith("2026-08-19T00:00:00")
+    assert document["verification_status"] == "verified"
+    assert document["extracted_fields"] == {"registration_number": "BBMP/D/2026/00001"}
+
+    async with sessions() as session:
+        stored = (await session.scalars(select(Document))).one()
+        stored.verification_status = VerificationStatus.REJECTED
+        await session.commit()
+    rejected = await client.get(f"/api/cases/{case_id}/tasks/{tasks[0].id}/requirements")
+    death_certificate = next(
+        item for item in rejected.json() if item["type"] == "death_certificate"
+    )
+    assert death_certificate["status"] == "missing"

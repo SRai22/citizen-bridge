@@ -13,6 +13,7 @@ from app.models import ApprovalRequest, Task, TaskStatus
 from app.repositories import CaseRepository, TaskRepository
 from app.schemas import (
     ApprovalRequestRead,
+    DocumentRequirementRead,
     ExternalApplicationRead,
     RequiredDocumentRead,
     TaskDetailRead,
@@ -75,6 +76,26 @@ async def get_task(
             ],
         }
     )
+
+
+@router.get("/{task_id}/requirements", response_model=list[DocumentRequirementRead])
+async def get_task_requirements(
+    case_id: UUID,
+    task_id: UUID,
+    session: SessionDep,
+) -> list[DocumentRequirementRead]:
+    task = await require_task(session, case_id, task_id)
+    try:
+        requirements = await SubmissionService(session).document_requirements(task)
+    except SubmissionServiceError as error:
+        raise submission_http_error(error) from error
+    return [
+        DocumentRequirementRead(
+            **requirement.model_dump(),
+            status="satisfied" if satisfied else "missing",
+        )
+        for requirement, satisfied in requirements
+    ]
 
 
 @router.post(

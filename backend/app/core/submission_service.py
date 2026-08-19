@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.adapters import AdapterStatus, GovernmentAdapter, get_adapter
 from app.core.workflow_engine import WorkflowEngine
 from app.core.workflow_loader import WorkflowLoader
-from app.core.workflow_schema import TaskDefinition, WorkflowDefinition
+from app.core.workflow_schema import DocumentRequirement, TaskDefinition, WorkflowDefinition
 from app.db.base import utc_now
 from app.models import (
     ApprovalRequest,
@@ -21,6 +21,7 @@ from app.models import (
     ExternalApplicationStatus,
     Task,
     TaskStatus,
+    VerificationStatus,
 )
 
 AdapterFactory = Callable[[str, AsyncSession], GovernmentAdapter]
@@ -48,9 +49,7 @@ class MissingRequiredDocumentsError(SubmissionServiceError):
 
     def __init__(self, missing_document_types: list[str]) -> None:
         self.missing_document_types = missing_document_types
-        super().__init__(
-            f"Missing required documents: {', '.join(missing_document_types)}"
-        )
+        super().__init__(f"Missing required documents: {', '.join(missing_document_types)}")
 
 
 class ApprovalNotFoundError(SubmissionServiceError):
@@ -118,8 +117,7 @@ class SubmissionService:
                         "adapter_type": workflow.adapter_type,
                         "input_data": dict(task.input_data),
                         "required_documents": [
-                            requirement.type
-                            for requirement in task_definition.required_documents
+                            requirement.type for requirement in task_definition.required_documents
                         ],
                     },
                 )
@@ -200,6 +198,29 @@ class SubmissionService:
             .order_by(ApprovalRequest.requested_at, ApprovalRequest.id)
         )
         return list(result.all())
+
+    async def document_requirements(
+        self,
+        task: Task,
+        task_definition: TaskDefinition | None = None,
+    ) -> list[tuple[DocumentRequirement, bool]]:
+        """Return the task definition's requirements and their current case status."""
+        if task_definition is None:
+            _, task_definition = self._definition_for_task(task)
+        available_types = set(
+            (
+                await self.session.scalars(
+                    select(Document.document_type).where(
+                        Document.case_id == task.case_id,
+                        Document.verification_status != VerificationStatus.REJECTED,
+                    )
+                )
+            ).all()
+        )
+        return [
+            (requirement, requirement.type in available_types)
+            for requirement in task_definition.required_documents
+        ]
 
     async def _execute_submission(
         self,
@@ -303,17 +324,10 @@ class SubmissionService:
         task: Task,
         task_definition: TaskDefinition,
     ) -> None:
-        available_types = set(
-            (
-                await self.session.scalars(
-                    select(Document.document_type).where(Document.case_id == task.case_id)
-                )
-            ).all()
+        requirements = await self.document_requirements(task, task_definition)
+        missing = sorted(
+            requirement.type for requirement, satisfied in requirements if not satisfied
         )
-        required_types = {
-            requirement.type for requirement in task_definition.required_documents
-        }
-        missing = sorted(required_types - available_types)
         if missing:
             raise MissingRequiredDocumentsError(missing)
 
