@@ -1,0 +1,45 @@
+name: citizen-bridge
+
+services:
+  backend:
+    build:
+      context: ./backend
+      target: runner
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///./data/citizen_bridge.db}
+      DEMO_MODE: ${DEMO_MODE:-true}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      MOCK_AI: ${MOCK_AI:-true}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - citizen_bridge_data:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      target: runner
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      API_URL: ${API_URL:-http://backend:8000}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    restart: unless-stopped
+
+volumes:
+  citizen_bridge_data:
