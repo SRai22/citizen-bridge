@@ -39,7 +39,12 @@ export function dependencySummary(task: Task, tasks: Task[]): string {
   const incomplete = task.dependencies.filter(
     (dependency) => tasksById.get(dependency.depends_on_task_id)?.status !== "completed",
   );
-  return `${incomplete.length ? "Waiting on" : "Prerequisite complete"}: ${dependencies.join(", ")}`;
+  const prefix = task.status === "blocked"
+    ? "Blocked by"
+    : incomplete.length
+      ? "Waiting on"
+      : "Prerequisite complete";
+  return `${prefix}: ${dependencies.join(", ")}`;
 }
 
 export function statusMessage(status: TaskStatus): string {

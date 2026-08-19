@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { AppHeader } from "@/components/app-header";
 import { ApprovalDialog } from "@/components/approval-dialog";
 import { ErrorState, LoadingState } from "@/components/page-state";
+import { RejectionReplan } from "@/components/rejection-replan";
 import { StatusBadge } from "@/components/status-badge";
 import {
   fieldsForTask,
@@ -249,10 +250,15 @@ export default function TaskDetailPage() {
                   </p>
                 ) : null}
                 {failureMessage ? (
-                  <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-rose-900" role="alert">
-                    <p className="text-sm font-bold">Submission needs attention</p>
-                    <p className="mt-1 text-sm leading-6">{failureMessage}</p>
-                  </div>
+                  <>
+                    <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-rose-900" role="alert">
+                      <p className="text-sm font-bold">Submission needs attention</p>
+                      <p className="mt-1 text-sm leading-6">{failureMessage}</p>
+                    </div>
+                    {task.status === "failed" && latestFailure?.status === "rejected" ? (
+                      <RejectionReplan caseId={id} taskId={taskId} />
+                    ) : null}
+                  </>
                 ) : null}
               </header>
 

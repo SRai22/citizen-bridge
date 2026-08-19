@@ -2,15 +2,26 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, expect, test, vi } from "vitest";
 
 import { citizenCase, taskDetail } from "@/test/fixtures";
-import type { ApprovalRequest, ExternalApplication, TaskDetail } from "@/types/api";
+import type {
+  ApprovalRequest,
+  ExternalApplication,
+  RejectionInterpretation,
+  TaskDetail,
+} from "@/types/api";
 
 import TaskDetailPage from "./page";
 
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "case-12345678", taskId: "task-pension" }),
+  useRouter: () => ({ push }),
 }));
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  push.mockReset();
+  vi.restoreAllMocks();
+});
 
 const approval: ApprovalRequest = {
   id: "approval-1",
@@ -50,6 +61,18 @@ const readyDeathTask: TaskDetail = {
   dependencies: [],
   input_data: {},
   required_documents: [],
+};
+
+const interpretation: RejectionInterpretation = {
+  cause: "missing_legal_heir_certificate",
+  explanation:
+    "BESCOM requires a Legal Heir Certificate before the electricity account can be transferred.",
+  confidence: 0.99,
+  remediation: {
+    action: "add_task",
+    workflow_id: "legal_heir_certificate",
+    dependency_target: "bescom_transfer",
+  },
 };
 
 test("fetches and renders full task details", async () => {
@@ -193,7 +216,7 @@ test("cancel rejects the approval and returns the task to ready", async () => {
   expect(screen.getByRole("button", { name: "Prepare submission" })).toBeEnabled();
 });
 
-test("shows the authority rejection reason for a failed task", async () => {
+test("explains a rejection and accepts the proposed remediation", async () => {
   const failedTask: TaskDetail = {
     ...readyDeathTask,
     status: "failed",
@@ -205,12 +228,63 @@ test("shows the authority rejection reason for a failed task", async () => {
       },
     ],
   };
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
-    Response.json(String(input).endsWith("/tasks/task-pension") ? failedTask : citizenCase),
-  );
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = String(input);
+    if (url.endsWith("/interpret-rejection")) return Response.json(interpretation);
+    if (url.endsWith("/accept-remediation")) return Response.json(citizenCase);
+    return Response.json(url.endsWith("/tasks/task-pension") ? failedTask : citizenCase);
+  });
 
   render(<TaskDetailPage />);
 
   expect(await screen.findByText("Submission needs attention")).toBeInTheDocument();
   expect(screen.getByText("A Legal Heir Certificate is required.")).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "System Analysis" })).toBeInTheDocument();
+  expect(screen.getByText(interpretation.explanation)).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Proposed Action" })).toBeInTheDocument();
+  expect(screen.getByText(/Obtain Legal Heir Certificate/)).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Accept Recommendation" }));
+
+  await waitFor(() => expect(push).toHaveBeenCalledWith("/case/case-12345678"));
+  const acceptance = fetchMock.mock.calls.find(([input]) =>
+    String(input).endsWith("/accept-remediation"),
+  );
+  expect(acceptance?.[1]).toEqual(
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify(interpretation.remediation),
+    }),
+  );
+});
+
+test("dismisses the recommendation without changing the failed task", async () => {
+  const failedTask: TaskDetail = {
+    ...readyDeathTask,
+    status: "failed",
+    external_applications: [
+      {
+        ...approvedApplication,
+        status: "rejected",
+        response_payload: { message: "A Legal Heir Certificate is required.", data: {} },
+      },
+    ],
+  };
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = String(input);
+    if (url.endsWith("/interpret-rejection")) return Response.json(interpretation);
+    return Response.json(url.endsWith("/tasks/task-pension") ? failedTask : citizenCase);
+  });
+
+  render(<TaskDetailPage />);
+  await screen.findByRole("heading", { name: "Proposed Action" });
+  fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+
+  expect(screen.queryByRole("heading", { name: "System Analysis" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Proposed Action" })).not.toBeInTheDocument();
+  expect(screen.getByText("A Legal Heir Certificate is required.")).toBeInTheDocument();
+  expect(
+    fetchMock.mock.calls.some(([input]) => String(input).endsWith("/accept-remediation")),
+  ).toBe(false);
+  expect(push).not.toHaveBeenCalled();
 });

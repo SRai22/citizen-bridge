@@ -45,6 +45,19 @@ export interface IntakeConfirmation {
   case_id: string;
 }
 
+export interface RemediationAction {
+  action: "add_task";
+  workflow_id: string;
+  dependency_target: string;
+}
+
+export interface RejectionInterpretation {
+  cause: string;
+  explanation: string;
+  confidence: number;
+  remediation: RemediationAction;
+}
+
 export interface TaskDependency {
   id: string;
   created_at: string;

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
-import { citizenCase } from "@/test/fixtures";
+import { citizenCase, makeTask } from "@/test/fixtures";
 
 import CaseOverviewPage from "./page";
 
@@ -50,4 +50,44 @@ test("shows a retryable error when the backend is unavailable", async () => {
   expect(await screen.findByRole("heading", { name: "We couldn't load this page" })).toBeInTheDocument();
   expect(screen.getByText(/currently unreachable/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+});
+
+test("shows a replanned task and names the prerequisite blocking the failed task", async () => {
+  const legalHeirTask = makeTask({
+    id: "task-legal-heir",
+    title: "Obtain Legal Heir Certificate",
+    workflow_id: "legal_heir_certificate",
+    status: "ready",
+  });
+  const blockedBescomTask = makeTask({
+    id: "task-bescom",
+    title: "Transfer BESCOM Electricity Account",
+    workflow_id: "bescom_transfer",
+    status: "blocked",
+    dependencies: [
+      {
+        id: "dependency-remediation",
+        created_at: citizenCase.created_at,
+        updated_at: citizenCase.updated_at,
+        task_id: "task-bescom",
+        depends_on_task_id: legalHeirTask.id,
+        dependency_type: "completion",
+      },
+    ],
+  });
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    Response.json({ ...citizenCase, tasks: [legalHeirTask, blockedBescomTask] }),
+  );
+
+  render(<CaseOverviewPage />);
+
+  expect((await screen.findByText("Obtain Legal Heir Certificate")).closest("a")).toHaveAttribute(
+    "href",
+    "/case/case-12345678/task/task-legal-heir",
+  );
+  expect(screen.getByRole("link", { name: /Transfer BESCOM Electricity Account/ })).toHaveTextContent(
+    "Blocked by: Obtain Legal Heir Certificate",
+  );
+  expect(screen.getByText("Ready")).toBeInTheDocument();
+  expect(screen.getByText("Blocked")).toBeInTheDocument();
 });

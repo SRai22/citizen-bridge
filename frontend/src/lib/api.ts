@@ -4,6 +4,8 @@ import type {
   ExternalApplication,
   IntakeConfirmation,
   IntakeResponse,
+  RejectionInterpretation,
+  RemediationAction,
   TaskDetail,
 } from "@/types/api";
 
@@ -120,5 +122,30 @@ export function rejectSubmission(approvalId: string): Promise<ApprovalRequest> {
   return request<ApprovalRequest>(
     `/api/approvals/${encodeURIComponent(approvalId)}/reject`,
     { method: "POST" },
+  );
+}
+
+export function interpretRejection(
+  caseId: string,
+  taskId: string,
+  signal?: AbortSignal,
+): Promise<RejectionInterpretation> {
+  return request<RejectionInterpretation>(
+    `/api/cases/${encodeURIComponent(caseId)}/tasks/${encodeURIComponent(taskId)}/interpret-rejection`,
+    { method: "POST", signal },
+  );
+}
+
+export function acceptRemediation(
+  caseId: string,
+  remediation: RemediationAction,
+): Promise<CitizenCase> {
+  return request<CitizenCase>(
+    `/api/cases/${encodeURIComponent(caseId)}/accept-remediation`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(remediation),
+    },
   );
 }
