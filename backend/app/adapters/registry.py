@@ -5,11 +5,13 @@ from collections.abc import Callable
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import GovernmentAdapter
+from app.adapters.bescom import BescomTransferAdapter
 from app.adapters.death_certificate import DeathCertificateAdapter
 
 AdapterFactory = Callable[[AsyncSession], GovernmentAdapter]
 
 ADAPTER_REGISTRY: dict[str, AdapterFactory] = {
+    "bescom": BescomTransferAdapter,
     "death_certificate": DeathCertificateAdapter,
 }
 

@@ -20,6 +20,31 @@ export type ExternalApplicationStatus =
 
 export type ApprovalStatus = "pending" | "approved" | "rejected";
 
+export interface IntakePersonProfile {
+  name: string;
+  relationship: string;
+  occupation: string;
+  pension_status: "active" | "inactive" | "none" | "unknown";
+}
+
+export interface IntakeHouseholdProfile {
+  deceased: IntakePersonProfile;
+  surviving_members: IntakePersonProfile[];
+  location: { city: string; state: string };
+  assets: { bescom: boolean; ration_card: boolean; property: boolean };
+}
+
+export interface IntakeResponse {
+  session_id: string;
+  status: "in_progress" | "complete";
+  message: string;
+  profile: IntakeHouseholdProfile | null;
+}
+
+export interface IntakeConfirmation {
+  case_id: string;
+}
+
 export interface TaskDependency {
   id: string;
   created_at: string;

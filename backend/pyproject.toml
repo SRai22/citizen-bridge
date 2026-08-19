@@ -11,6 +11,7 @@ dependencies = [
     "aiosqlite>=0.21,<1",
     "alembic>=1.16,<2",
     "fastapi>=0.116,<1",
+    "openai>=1.99,<3",
     "pydantic>=2.11,<3",
     "pyyaml>=6.0,<7",
     "sqlalchemy[asyncio]>=2.0,<3",
@@ -30,6 +31,7 @@ dev = [
 include = ["app*"]
 
 [tool.setuptools.package-data]
+"app.ai" = ["prompts/*.md"]
 "app.workflows" = ["definitions/*.yaml"]
 
 [tool.pytest.ini_options]

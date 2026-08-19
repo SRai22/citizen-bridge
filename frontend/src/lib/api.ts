@@ -2,6 +2,8 @@ import type {
   ApprovalRequest,
   CitizenCase,
   ExternalApplication,
+  IntakeConfirmation,
+  IntakeResponse,
   TaskDetail,
 } from "@/types/api";
 
@@ -15,6 +17,27 @@ export class ApiError extends Error {
     super(message);
     this.name = "ApiError";
   }
+}
+
+export function startIntake(signal?: AbortSignal): Promise<IntakeResponse> {
+  return request<IntakeResponse>("/api/intake/start", { method: "POST", signal });
+}
+
+export function sendIntakeMessage(
+  sessionId: string,
+  message: string,
+): Promise<IntakeResponse> {
+  return request<IntakeResponse>(`/api/intake/${encodeURIComponent(sessionId)}/message`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message }),
+  });
+}
+
+export function confirmIntake(sessionId: string): Promise<IntakeConfirmation> {
+  return request<IntakeConfirmation>(`/api/intake/${encodeURIComponent(sessionId)}/confirm`, {
+    method: "POST",
+  });
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
