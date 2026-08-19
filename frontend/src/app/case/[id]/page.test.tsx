@@ -5,7 +5,10 @@ import { citizenCase, makeTask } from "@/test/fixtures";
 
 import CaseOverviewPage from "./page";
 
-vi.mock("next/navigation", () => ({ useParams: () => ({ id: "case-12345678" }) }));
+vi.mock("next/navigation", () => ({
+  useParams: () => ({ id: "case-12345678" }),
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
 
 afterEach(() => vi.restoreAllMocks());
 

@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from app.api import (
     approvals_router,
     cases_router,
+    demo_router,
     intake_router,
     replanning_router,
     tasks_router,
@@ -52,6 +53,7 @@ def create_app() -> FastAPI:
     application.include_router(approvals_router)
     application.include_router(intake_router)
     application.include_router(replanning_router)
+    application.include_router(demo_router)
 
     @application.get("/health", response_model=HealthResponse, tags=["system"])
     async def health() -> HealthResponse:

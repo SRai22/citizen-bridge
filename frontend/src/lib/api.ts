@@ -149,3 +149,19 @@ export function acceptRemediation(
     },
   );
 }
+
+export interface SeedResponse {
+  case_id: string;
+  state: string;
+  tasks: number;
+}
+
+export function resetDemo(): Promise<{ status: string }> {
+  return request<{ status: string }>("/api/demo/reset", { method: "POST" });
+}
+
+export function seedDemo(
+  state: "initial" | "after_death_cert" | "after_bescom_rejection" = "initial",
+): Promise<SeedResponse> {
+  return request<SeedResponse>(`/api/demo/seed?state=${state}`, { method: "POST" });
+}

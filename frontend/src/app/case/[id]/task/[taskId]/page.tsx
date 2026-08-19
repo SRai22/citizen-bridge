@@ -125,7 +125,10 @@ export default function TaskDetailPage() {
     setActionError(null);
     setNotice(null);
     try {
-      await updateTaskInput(id, taskId, values);
+      // Declare all required documents as user-provided for submission validation
+      const documentsProvided = (task.required_documents ?? []).map((d) => d.type);
+      const input = { ...values, ...(documentsProvided.length ? { documents_provided: documentsProvided } : {}) };
+      await updateTaskInput(id, taskId, input);
       const outcome = await prepareTask(id, taskId);
       await refreshData();
       if (isApprovalRequest(outcome)) {

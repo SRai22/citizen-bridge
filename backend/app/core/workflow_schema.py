@@ -46,7 +46,7 @@ class TaskDefinition(WorkflowSchemaModel):
     name: Annotated[str, Field(min_length=1, max_length=250)]
     type: Identifier
     requires_approval: bool
-    required_documents: Annotated[list[DocumentRequirement], Field(min_length=1)]
+    required_documents: list[DocumentRequirement] = Field(default_factory=list)
     produces_documents: Annotated[list[DocumentProduced], Field(min_length=1)]
     estimated_duration_days: Annotated[int, Field(ge=1, le=3650)]
 

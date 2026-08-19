@@ -325,8 +325,12 @@ class SubmissionService:
         task_definition: TaskDefinition,
     ) -> None:
         requirements = await self.document_requirements(task, task_definition)
+        # Documents declared in input_data are user-provided (not system-produced)
+        declared = set(task.input_data.get("documents_provided", []))
         missing = sorted(
-            requirement.type for requirement, satisfied in requirements if not satisfied
+            requirement.type
+            for requirement, satisfied in requirements
+            if not satisfied and requirement.type not in declared
         )
         if missing:
             raise MissingRequiredDocumentsError(missing)
