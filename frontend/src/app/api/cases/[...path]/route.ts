@@ -1,25 +1,25 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+
+import { proxyBackendRequest } from "../../_proxy";
 
 interface RouteContext {
   params: Promise<{ path: string[] }>;
 }
 
 export async function GET(request: NextRequest, context: RouteContext) {
-  const apiUrl = process.env.API_URL ?? "http://localhost:8000";
   const { path } = await context.params;
   const backendPath = path.map(encodeURIComponent).join("/");
+  return proxyBackendRequest(request, `/api/cases/${backendPath}`);
+}
 
-  try {
-    const response = await fetch(
-      `${apiUrl}/api/cases/${backendPath}${request.nextUrl.search}`,
-      { cache: "no-store", headers: { Accept: "application/json" } },
-    );
-    const payload: unknown = await response.json();
-    return NextResponse.json(payload, { status: response.status });
-  } catch {
-    return NextResponse.json(
-      { detail: "The Citizen Bridge service is currently unreachable." },
-      { status: 503 },
-    );
-  }
+export async function POST(request: NextRequest, context: RouteContext) {
+  const { path } = await context.params;
+  const backendPath = path.map(encodeURIComponent).join("/");
+  return proxyBackendRequest(request, `/api/cases/${backendPath}`);
+}
+
+export async function PATCH(request: NextRequest, context: RouteContext) {
+  const { path } = await context.params;
+  const backendPath = path.map(encodeURIComponent).join("/");
+  return proxyBackendRequest(request, `/api/cases/${backendPath}`);
 }

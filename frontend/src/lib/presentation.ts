@@ -23,6 +23,13 @@ export function formatDate(value: string): string {
   }).format(new Date(value));
 }
 
+export function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
 export function dependencySummary(task: Task, tasks: Task[]): string {
   if (task.dependencies.length === 0) return "No prerequisites";
   const tasksById = new Map(tasks.map((candidate) => [candidate.id, candidate]));
