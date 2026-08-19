@@ -99,7 +99,7 @@ class WorkflowEngine:
         return [
             definition
             for definition in self.workflow_loader.load_all()
-            if definition.is_applicable(profile)
+            if not definition.dynamic and definition.is_applicable(profile)
         ]
 
     async def activate_workflows(
@@ -150,6 +150,70 @@ class WorkflowEngine:
         return sorted(
             (task for task in tasks_by_key.values() if task.workflow_id in applicable_ids),
             key=lambda task: (task.workflow_id, task.task_type),
+        )
+
+    async def activate_dynamic_workflow(
+        self,
+        case_id: UUID,
+        workflow_id: str,
+        *,
+        commit: bool = True,
+    ) -> list[Task]:
+        """Idempotently add one explicitly requested dynamic workflow to a case."""
+        if await self.session.get(Case, case_id) is None:
+            raise CaseNotFoundError(f"Case not found: {case_id}")
+
+        definitions = {definition.id: definition for definition in self.workflow_loader.load_all()}
+        definition = definitions.get(workflow_id)
+        if definition is None or not definition.dynamic:
+            raise WorkflowActivationError(f"Unknown dynamic workflow: {workflow_id}")
+
+        existing_tasks = list(
+            (await self.session.scalars(select(Task).where(Task.case_id == case_id))).all()
+        )
+        tasks_by_key = {(task.workflow_id, task.task_type): task for task in existing_tasks}
+        try:
+            for task_definition in definition.tasks:
+                key = (definition.id, task_definition.id)
+                if key not in tasks_by_key:
+                    task = Task(
+                        case_id=case_id,
+                        workflow_id=definition.id,
+                        task_type=task_definition.id,
+                        status=TaskStatus.PENDING,
+                        title=task_definition.name,
+                    )
+                    self.session.add(task)
+                    tasks_by_key[key] = task
+
+            await self.session.flush()
+            downstream = tasks_by_key[(definition.id, definition.tasks[0].id)]
+            for dependency_id in definition.inter_workflow_dependencies:
+                dependency_definition = definitions[dependency_id]
+                dependency_key = (dependency_id, dependency_definition.tasks[-1].id)
+                upstream = tasks_by_key.get(dependency_key)
+                if upstream is None:
+                    raise WorkflowActivationError(
+                        f"Dynamic workflow '{workflow_id}' requires inactive workflow "
+                        f"'{dependency_id}'"
+                    )
+                await self.dependency_solver.add_dependency(downstream.id, upstream.id)
+
+            await self._apply_readiness_changes(
+                case_id,
+                context={"reason": "dynamic_activation", "workflow_id": workflow_id},
+            )
+            if commit:
+                await self.session.commit()
+            else:
+                await self.session.flush()
+        except Exception:
+            await self.session.rollback()
+            raise
+
+        return sorted(
+            (task for task in tasks_by_key.values() if task.workflow_id == workflow_id),
+            key=lambda task: task.task_type,
         )
 
     async def transition_task(

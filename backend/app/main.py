@@ -8,7 +8,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from app.api import approvals_router, cases_router, intake_router, tasks_router
+from app.api import (
+    approvals_router,
+    cases_router,
+    intake_router,
+    replanning_router,
+    tasks_router,
+)
 from app.db.migrations import migrate_database
 from app.db.session import engine
 
@@ -45,6 +51,7 @@ def create_app() -> FastAPI:
     application.include_router(tasks_router)
     application.include_router(approvals_router)
     application.include_router(intake_router)
+    application.include_router(replanning_router)
 
     @application.get("/health", response_model=HealthResponse, tags=["system"])
     async def health() -> HealthResponse:

@@ -1,0 +1,28 @@
+id: legal_heir_certificate
+name: Legal Heir Certificate
+description: Obtain a certificate identifying the lawful heirs of the deceased.
+authority: Karnataka Revenue Department
+adapter_type: legal_heir_certificate
+dynamic: true
+applicability_rules:
+  - field: deceased.is_deceased
+    equals: true
+tasks:
+  - id: legal_heir_application
+    name: Apply for Legal Heir Certificate
+    type: government_submission
+    requires_approval: true
+    required_documents:
+      - type: death_certificate
+        owner: deceased
+        description: Official death certificate for the deceased.
+      - type: aadhaar
+        owner: applicant
+        description: Aadhaar identity document for the applicant.
+    produces_documents:
+      - type: legal_heir_certificate
+        owner: applicant
+        description: Certificate issued by the jurisdictional Tahsildar identifying legal heirs.
+    estimated_duration_days: 14
+inter_workflow_dependencies:
+  - death_certificate

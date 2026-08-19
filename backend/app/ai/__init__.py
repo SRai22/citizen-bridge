@@ -9,6 +9,12 @@ from app.ai.intake_agent import (
     Location,
     PersonProfile,
 )
+from app.ai.rejection_interpreter import (
+    Interpretation,
+    RejectionAIUnavailableError,
+    RejectionInterpreter,
+    RemediationAction,
+)
 
 __all__ = [
     "HouseholdAssets",
@@ -16,6 +22,10 @@ __all__ = [
     "IntakeAIUnavailableError",
     "IntakeAgent",
     "IntakeTurn",
+    "Interpretation",
     "Location",
     "PersonProfile",
+    "RejectionAIUnavailableError",
+    "RejectionInterpreter",
+    "RemediationAction",
 ]

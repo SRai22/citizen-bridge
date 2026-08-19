@@ -67,6 +67,7 @@ class WorkflowDefinition(WorkflowSchemaModel):
     description: Annotated[str, Field(min_length=1, max_length=1000)]
     authority: Annotated[str, Field(min_length=1, max_length=250)]
     adapter_type: Identifier
+    dynamic: bool = False
     applicability_rules: Annotated[list[ApplicabilityRule], Field(min_length=1)]
     tasks: Annotated[list[TaskDefinition], Field(min_length=1)]
     inter_workflow_dependencies: list[Identifier]

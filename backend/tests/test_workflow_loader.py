@@ -13,6 +13,7 @@ def test_loads_and_validates_bundled_workflow_definitions() -> None:
         "death_certificate",
         "family_pension",
         "bescom_transfer",
+        "legal_heir_certificate",
         "ration_card",
     }
     assert all(isinstance(definition, WorkflowDefinition) for definition in definitions)
@@ -21,6 +22,7 @@ def test_loads_and_validates_bundled_workflow_definitions() -> None:
         for definition in definitions
     )
     assert definitions_by_id["death_certificate"].inter_workflow_dependencies == []
+    assert definitions_by_id["legal_heir_certificate"].dynamic is True
     for workflow_id in {"family_pension", "bescom_transfer", "ration_card"}:
         assert definitions_by_id[workflow_id].inter_workflow_dependencies == ["death_certificate"]
         assert "death_certificate" in definitions_by_id[workflow_id].required_document_types
