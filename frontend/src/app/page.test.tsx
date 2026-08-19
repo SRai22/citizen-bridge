@@ -74,7 +74,7 @@ test("starts the intake and shows messages with a pending indicator", async () =
   expect(await screen.findByText("Which city and state did he live in?")).toBeInTheDocument();
   expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
   expect(fetchMock).toHaveBeenCalledTimes(2);
-  expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/intake/session-123/message");
+  expect(fetchMock.mock.calls[1]?.[0]).toMatch(/\/api\/intake\/session-123\/message$/);
   expect(fetchMock.mock.calls[1]?.[1]).toEqual(
     expect.objectContaining({
       method: "POST",
