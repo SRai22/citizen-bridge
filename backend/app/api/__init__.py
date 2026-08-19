@@ -1,6 +1,7 @@
 """HTTP API routers."""
 
+from app.api.approvals import router as approvals_router
 from app.api.cases import router as cases_router
 from app.api.tasks import router as tasks_router
 
-__all__ = ["cases_router", "tasks_router"]
+__all__ = ["approvals_router", "cases_router", "tasks_router"]

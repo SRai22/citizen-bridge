@@ -6,11 +6,19 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import WorkflowLoader
+from app.api.submission_errors import submission_http_error
+from app.core import SubmissionService, SubmissionServiceError, WorkflowLoader
 from app.db.session import get_session
-from app.models import Task, TaskStatus
+from app.models import ApprovalRequest, Task, TaskStatus
 from app.repositories import CaseRepository, TaskRepository
-from app.schemas import RequiredDocumentRead, TaskDetailRead, TaskInputUpdate, TaskRead
+from app.schemas import (
+    ApprovalRequestRead,
+    ExternalApplicationRead,
+    RequiredDocumentRead,
+    TaskDetailRead,
+    TaskInputUpdate,
+    TaskRead,
+)
 
 router = APIRouter(prefix="/api/cases/{case_id}/tasks", tags=["tasks"])
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
@@ -67,6 +75,25 @@ async def get_task(
             ],
         }
     )
+
+
+@router.post(
+    "/{task_id}/prepare",
+    response_model=ApprovalRequestRead | ExternalApplicationRead,
+)
+async def prepare_task_submission(
+    case_id: UUID,
+    task_id: UUID,
+    session: SessionDep,
+) -> ApprovalRequestRead | ExternalApplicationRead:
+    task = await require_task(session, case_id, task_id)
+    try:
+        outcome = await SubmissionService(session).prepare(task.id)
+    except SubmissionServiceError as error:
+        raise submission_http_error(error) from error
+    if isinstance(outcome, ApprovalRequest):
+        return ApprovalRequestRead.model_validate(outcome)
+    return ExternalApplicationRead.model_validate(outcome)
 
 
 @router.patch("/{task_id}", response_model=TaskDetailRead)

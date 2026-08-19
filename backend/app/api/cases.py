@@ -6,10 +6,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import SubmissionService
 from app.db.session import get_session
 from app.models import CaseStatus
 from app.repositories import CaseRepository
-from app.schemas import CaseCreate, CaseRead
+from app.schemas import ApprovalRequestRead, CaseCreate, CaseRead
 
 router = APIRouter(prefix="/api/cases", tags=["cases"])
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
@@ -33,6 +34,17 @@ async def get_case(
     if case is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
     return CaseRead.model_validate(case)
+
+
+@router.get("/{case_id}/approvals", response_model=list[ApprovalRequestRead])
+async def list_case_approvals(
+    case_id: UUID,
+    session: SessionDep,
+) -> list[ApprovalRequestRead]:
+    if not await CaseRepository(session).exists(case_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+    approvals = await SubmissionService(session).list_approvals(case_id)
+    return [ApprovalRequestRead.model_validate(approval) for approval in approvals]
 
 
 @router.post("/{case_id}/activate", response_model=CaseRead)

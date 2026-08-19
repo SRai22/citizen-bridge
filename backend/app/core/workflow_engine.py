@@ -157,6 +157,8 @@ class WorkflowEngine:
         task_id: UUID,
         new_status: TaskStatus,
         context: Mapping[str, Any] | None = None,
+        *,
+        commit: bool = True,
     ) -> Task:
         """Apply one valid transition and any resulting readiness changes atomically."""
         task = await self.session.get(Task, task_id)
@@ -175,7 +177,10 @@ class WorkflowEngine:
                 task.case_id,
                 context={"reason": "dependency_evaluation"},
             )
-            await self.session.commit()
+            if commit:
+                await self.session.commit()
+            else:
+                await self.session.flush()
         except Exception:
             await self.session.rollback()
             raise

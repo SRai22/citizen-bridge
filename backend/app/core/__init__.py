@@ -8,6 +8,17 @@ from app.core.dependency_solver import (
     InvalidDependencyError,
     TaskNotFoundError,
 )
+from app.core.submission_service import (
+    ApprovalNotFoundError,
+    InvalidApprovalStateError,
+    InvalidSubmissionStateError,
+    MissingRequiredDocumentsError,
+    PreparationOutcome,
+    SubmissionDefinitionError,
+    SubmissionService,
+    SubmissionServiceError,
+    SubmissionTaskNotFoundError,
+)
 from app.core.workflow_engine import (
     VALID_TASK_TRANSITIONS,
     CaseNotFoundError,
@@ -28,6 +39,7 @@ from app.core.workflow_schema import (
 
 __all__ = [
     "ApplicabilityRule",
+    "ApprovalNotFoundError",
     "CaseNotFoundError",
     "CyclicDependencyError",
     "DependencyGraph",
@@ -36,7 +48,15 @@ __all__ = [
     "DocumentProduced",
     "DocumentRequirement",
     "InvalidDependencyError",
+    "InvalidApprovalStateError",
+    "InvalidSubmissionStateError",
     "InvalidStateTransitionError",
+    "MissingRequiredDocumentsError",
+    "PreparationOutcome",
+    "SubmissionDefinitionError",
+    "SubmissionService",
+    "SubmissionServiceError",
+    "SubmissionTaskNotFoundError",
     "TaskDefinition",
     "TaskNotFoundError",
     "VALID_TASK_TRANSITIONS",
