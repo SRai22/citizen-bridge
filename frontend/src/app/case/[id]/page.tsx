@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -11,11 +12,17 @@ import { ApiError, getCase } from "@/lib/api";
 import { caseTitle, dependencySummary, formatDate } from "@/lib/presentation";
 import type { CitizenCase } from "@/types/api";
 
+const DependencyGraph = dynamic(
+  () => import("@/components/dependency-graph").then((m) => m.DependencyGraph),
+  { ssr: false, loading: () => <div className="h-[360px] w-full animate-pulse rounded-2xl bg-slate-100" /> },
+);
+
 export default function CaseOverviewPage() {
   const { id } = useParams<{ id: string }>();
   const [citizenCase, setCitizenCase] = useState<CitizenCase | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [view, setView] = useState<"list" | "graph">("list");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -73,10 +80,34 @@ export default function CaseOverviewPage() {
                     Tasks
                   </h2>
                 </div>
-                <p className="text-sm text-slate-500">
-                  {citizenCase.tasks.length} {citizenCase.tasks.length === 1 ? "task" : "tasks"}
-                </p>
+                <div className="flex items-center gap-3">
+                  <p className="text-sm text-slate-500">
+                    {citizenCase.tasks.length} {citizenCase.tasks.length === 1 ? "task" : "tasks"}
+                  </p>
+                  <div className="flex rounded-lg border border-slate-200 bg-white p-0.5">
+                    <button
+                      onClick={() => setView("list")}
+                      className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${view === "list" ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:text-slate-900"}`}
+                      aria-pressed={view === "list"}
+                    >
+                      List
+                    </button>
+                    <button
+                      onClick={() => setView("graph")}
+                      className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${view === "graph" ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:text-slate-900"}`}
+                      aria-pressed={view === "graph"}
+                    >
+                      Graph
+                    </button>
+                  </div>
+                </div>
               </div>
+
+              {view === "graph" && citizenCase.tasks.length > 0 && (
+                <div className="mb-6">
+                  <DependencyGraph tasks={citizenCase.tasks} caseId={citizenCase.id} />
+                </div>
+              )}
 
               {citizenCase.tasks.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-600">
