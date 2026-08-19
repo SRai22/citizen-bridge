@@ -28,6 +28,13 @@ uvicorn app.main:app --reload --env-file .env
 The API is available at <http://localhost:8000>; `GET /health` returns
 `{"status":"ok"}`.
 
+The SQLite schema is created automatically during API startup. To apply
+versioned migrations explicitly, run this from `backend/`:
+
+```bash
+alembic upgrade head
+```
+
 In a second terminal, start the frontend:
 
 ```bash

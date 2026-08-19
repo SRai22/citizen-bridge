@@ -8,8 +8,11 @@ version = "0.1.0"
 description = "API and orchestration service for Citizen Bridge"
 requires-python = ">=3.11"
 dependencies = [
+    "aiosqlite>=0.21,<1",
+    "alembic>=1.16,<2",
     "fastapi>=0.116,<1",
     "pydantic>=2.11,<3",
+    "sqlalchemy[asyncio]>=2.0,<3",
     "uvicorn[standard]>=0.35,<1",
 ]
 

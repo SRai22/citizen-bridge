@@ -21,6 +21,8 @@ RUN addgroup --system app && adduser --system --ingroup app app \
     && mkdir -p /app/data && chown -R app:app /app
 COPY --from=builder /wheels /wheels
 RUN pip install --no-cache-dir /wheels/*.whl && rm -rf /wheels
+COPY alembic.ini ./
+COPY alembic ./alembic
 
 USER app
 EXPOSE 8000
@@ -36,6 +38,8 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY pyproject.toml ./
+COPY alembic.ini ./
+COPY alembic ./alembic
 COPY app ./app
 COPY tests ./tests
 RUN pip install --no-cache-dir -e ".[dev]"
