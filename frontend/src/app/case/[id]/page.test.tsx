@@ -28,9 +28,17 @@ test("renders case metadata, task statuses, dependencies, and detail links", asy
     "href",
     "/case/case-12345678/task/task-pension",
   );
-  expect(fetchMock).toHaveBeenCalledWith(
+  expect(fetchMock).toHaveBeenCalledOnce();
+  const [requestUrl, requestInit] = fetchMock.mock.calls[0]!;
+
+  expect(new URL(String(requestUrl), "http://test").pathname).toBe(
     "/api/cases/case-12345678",
-    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
+  expect(requestInit).toEqual(
+    expect.objectContaining({
+      headers: expect.objectContaining({ Accept: "application/json" }),
+      signal: expect.any(AbortSignal),
+    }),
   );
 });
 
