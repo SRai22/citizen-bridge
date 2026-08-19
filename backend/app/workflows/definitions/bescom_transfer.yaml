@@ -1,0 +1,35 @@
+id: bescom_transfer
+name: BESCOM Electricity Account Transfer
+description: Transfer a Bengaluru electricity connection from the deceased account holder to an heir.
+authority: Bangalore Electricity Supply Company Limited
+adapter_type: bescom
+applicability_rules:
+  - field: assets.bescom
+    equals: true
+  - field: deceased.was_electricity_account_holder
+    equals: true
+tasks:
+  - id: bescom_name_transfer
+    name: Transfer BESCOM Account Holder
+    type: government_submission
+    requires_approval: true
+    required_documents:
+      - type: death_certificate
+        owner: deceased
+        description: Official death certificate for the current account holder.
+      - type: electricity_bill
+        owner: deceased
+        description: Latest paid bill for the electricity connection.
+      - type: property_occupancy_proof
+        owner: applicant
+        description: Accepted ownership, tenancy, or occupancy document.
+      - type: applicant_identity
+        owner: applicant
+        description: Aadhaar or another accepted identity document for the applicant.
+    produces_documents:
+      - type: bescom_transfer_confirmation
+        owner: applicant
+        description: Confirmation that the electricity account name was transferred.
+    estimated_duration_days: 15
+inter_workflow_dependencies:
+  - death_certificate

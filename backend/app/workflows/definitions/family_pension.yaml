@@ -1,0 +1,38 @@
+id: family_pension
+name: Family Pension Transfer
+description: Transfer a deceased Karnataka state pensioner's family pension to the surviving spouse.
+authority: Accountant General Karnataka and Karnataka Treasury
+adapter_type: family_pension
+applicability_rules:
+  - field: deceased.pension_status
+    equals: active
+  - field: surviving_spouse.exists
+    equals: true
+tasks:
+  - id: family_pension_application
+    name: Apply for Family Pension
+    type: government_submission
+    requires_approval: true
+    required_documents:
+      - type: death_certificate
+        owner: deceased
+        description: Official death certificate for the deceased pensioner.
+      - type: pension_payment_order
+        owner: deceased
+        description: Existing Pension Payment Order for the deceased pensioner.
+      - type: marriage_certificate
+        owner: spouse
+        description: Marriage certificate or accepted proof of marriage.
+      - type: spouse_identity
+        owner: spouse
+        description: Aadhaar or another accepted identity document for the spouse.
+      - type: bank_account_proof
+        owner: spouse
+        description: Bank passbook or cancelled cheque for pension disbursement.
+    produces_documents:
+      - type: family_pension_sanction
+        owner: spouse
+        description: Family pension sanction and revised Pension Payment Order.
+    estimated_duration_days: 30
+inter_workflow_dependencies:
+  - death_certificate

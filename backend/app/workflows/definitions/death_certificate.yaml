@@ -1,0 +1,31 @@
+id: death_certificate
+name: Death Certificate Registration
+description: Register a death in Bengaluru and obtain the official death certificate.
+authority: BBMP Registrar of Births and Deaths
+adapter_type: death_certificate
+applicability_rules:
+  - field: deceased.is_deceased
+    equals: true
+  - field: location.state
+    equals: Karnataka
+tasks:
+  - id: death_registration
+    name: Register Death and Obtain Certificate
+    type: government_submission
+    requires_approval: true
+    required_documents:
+      - type: medical_certificate_cause_of_death
+        owner: deceased
+        description: Form 4 or Form 4A medical certificate of cause of death.
+      - type: deceased_identity
+        owner: deceased
+        description: Aadhaar or another accepted identity document for the deceased.
+      - type: informant_identity
+        owner: informant
+        description: Identity proof for the person reporting the death.
+    produces_documents:
+      - type: death_certificate
+        owner: deceased
+        description: Official death certificate issued by the local registrar.
+    estimated_duration_days: 7
+inter_workflow_dependencies: []

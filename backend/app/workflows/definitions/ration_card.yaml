@@ -1,0 +1,32 @@
+id: ration_card
+name: Ration Card Household Update
+description: Remove the deceased member and appoint a new head on the Karnataka ration card.
+authority: Karnataka Department of Food and Civil Supplies
+adapter_type: ration_card
+applicability_rules:
+  - field: assets.ration_card
+    equals: true
+  - field: deceased.was_head_of_household
+    equals: true
+tasks:
+  - id: ration_card_modification
+    name: Update Ration Card Household
+    type: government_submission
+    requires_approval: true
+    required_documents:
+      - type: death_certificate
+        owner: deceased
+        description: Official death certificate for the deceased household member.
+      - type: existing_ration_card
+        owner: household
+        description: Current ration card listing the household members.
+      - type: applicant_identity
+        owner: applicant
+        description: Aadhaar or another accepted identity document for the new household head.
+    produces_documents:
+      - type: updated_ration_card
+        owner: household
+        description: Updated ration card or official modification acknowledgement.
+    estimated_duration_days: 30
+inter_workflow_dependencies:
+  - death_certificate
