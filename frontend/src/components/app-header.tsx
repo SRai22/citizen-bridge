@@ -4,21 +4,23 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 
-import { resetDemo, seedDemo } from "@/lib/api";
+import { ApiError, resetDemo, seedDemo } from "@/lib/api";
 
 export function AppHeader() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleReset = useCallback(async () => {
     if (busy) return;
     setBusy(true);
+    setError(null);
     try {
       await resetDemo();
       router.push("/");
       router.refresh();
-    } catch {
-      // best-effort — the page will still navigate
+    } catch (reason) {
+      setError(errorMessage(reason));
     } finally {
       setBusy(false);
     }
@@ -28,14 +30,13 @@ export function AppHeader() {
     async (state: "initial" | "after_death_cert" | "after_bescom_rejection") => {
       if (busy) return;
       setBusy(true);
+      setError(null);
       try {
         await resetDemo();
         const result = await seedDemo(state);
         router.push(`/case/${result.case_id}`);
-      } catch {
-        // If seed fails after reset, go to intake
-        router.push("/");
-        router.refresh();
+      } catch (reason) {
+        setError(errorMessage(reason));
       } finally {
         setBusy(false);
       }
@@ -76,6 +77,17 @@ export function AppHeader() {
           </button>
         </div>
       </div>
+      {error ? (
+        <p className="mx-auto max-w-5xl px-5 pb-3 text-right text-xs font-medium text-rose-700 sm:px-8" role="alert">
+          {error}
+        </p>
+      ) : null}
     </header>
   );
+}
+
+function errorMessage(reason: unknown): string {
+  return reason instanceof ApiError
+    ? reason.message
+    : "The demo action failed. Please try again.";
 }

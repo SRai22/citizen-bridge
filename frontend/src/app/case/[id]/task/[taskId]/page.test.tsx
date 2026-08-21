@@ -240,7 +240,7 @@ test("explains a rejection and accepts the proposed remediation", async () => {
   expect(await screen.findByText("Submission needs attention")).toBeInTheDocument();
   expect(screen.getByText("A Legal Heir Certificate is required.")).toBeInTheDocument();
   expect(await screen.findByRole("heading", { name: "System Analysis" })).toBeInTheDocument();
-  expect(screen.getByText(interpretation.explanation)).toBeInTheDocument();
+  expect(await screen.findByText(interpretation.explanation)).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Proposed Action" })).toBeInTheDocument();
   expect(screen.getByText(/Obtain Legal Heir Certificate/)).toBeInTheDocument();
 

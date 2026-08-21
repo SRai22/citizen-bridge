@@ -52,6 +52,19 @@ def edge(task: Task, prerequisite: Task) -> TaskDependency:
 
 
 @pytest.mark.anyio
+async def test_empty_graph_has_no_changes_or_edges(
+    solver_context: tuple[AsyncSession, DependencySolver],
+) -> None:
+    session, solver = solver_context
+    case = Case()
+    session.add(case)
+    await session.flush()
+
+    assert await solver.evaluate_readiness(case.id) == {}
+    assert await solver.get_dependency_graph(case.id) == {"nodes": [], "edges": []}
+
+
+@pytest.mark.anyio
 async def test_linear_chain_readiness(
     solver_context: tuple[AsyncSession, DependencySolver],
 ) -> None:
@@ -102,6 +115,35 @@ async def test_fan_in_requires_every_prerequisite(
     task_c.status = TaskStatus.COMPLETED
     await session.flush()
     assert await solver.evaluate_readiness(task_d.case_id) == {task_d.id: TaskStatus.READY}
+
+
+@pytest.mark.anyio
+async def test_diamond_waits_for_both_middle_tasks(
+    solver_context: tuple[AsyncSession, DependencySolver],
+) -> None:
+    session, solver = solver_context
+    task_a, task_b, task_c, task_d = await create_tasks(
+        session,
+        [TaskStatus.COMPLETED, TaskStatus.PENDING, TaskStatus.PENDING, TaskStatus.PENDING],
+    )
+    session.add_all(
+        [
+            edge(task_b, task_a),
+            edge(task_c, task_a),
+            edge(task_d, task_b),
+            edge(task_d, task_c),
+        ]
+    )
+    await session.flush()
+
+    assert await solver.evaluate_readiness(task_a.case_id) == {
+        task_b.id: TaskStatus.READY,
+        task_c.id: TaskStatus.READY,
+    }
+    task_b.status = TaskStatus.COMPLETED
+    task_c.status = TaskStatus.COMPLETED
+    await session.flush()
+    assert await solver.evaluate_readiness(task_a.case_id) == {task_d.id: TaskStatus.READY}
 
 
 @pytest.mark.anyio

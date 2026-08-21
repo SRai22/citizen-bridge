@@ -56,7 +56,16 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { detail?: unknown } | null;
-    const serverDetail = typeof payload?.detail === "string" ? payload.detail : null;
+    const detail = payload?.detail;
+    const serverDetail =
+      typeof detail === "string"
+        ? detail
+        : detail &&
+            typeof detail === "object" &&
+            "message" in detail &&
+            typeof detail.message === "string"
+          ? detail.message
+          : null;
     const message =
       serverDetail ?? (response.status === 404
         ? "The requested record could not be found."

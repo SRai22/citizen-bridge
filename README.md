@@ -55,6 +55,7 @@ ruff check .
 ruff format --check .
 mypy app/
 pytest
+pytest --cov=app/core --cov-report=term-missing --cov-fail-under=80
 ```
 
 ```bash
@@ -64,6 +65,11 @@ npm run typecheck
 npm test
 npm run build
 ```
+
+The backend suite covers dependency graphs and state transitions, approval gates,
+all five adapters, document reuse, rejection/replanning, and the deterministic
+`MOCK_AI=true` demo loop. Frontend tests render the intake, case overview, task
+detail, dependency graph, loading, and error paths without external services.
 
 ## Run with Docker
 

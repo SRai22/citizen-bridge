@@ -111,7 +111,6 @@ async def reset_demo(session: SessionDep) -> ResetResponse:
 
 # -- Seed endpoint --------------------------------------------------------------
 
-
 @router.post("/seed", response_model=SeedResponse)
 async def seed_demo(
     session: SessionDep,
@@ -141,7 +140,6 @@ async def seed_demo(
 
 
 # -- Helper builders -----------------------------------------------------------
-
 
 def _create_base_case(session: AsyncSession) -> Case:
     case = Case(
@@ -297,9 +295,7 @@ async def _reject_bescom(
 
     # Activate legal heir workflow and block BESCOM on it
     remediation_tasks = await engine.activate_dynamic_workflow(
-        case_id,
-        "legal_heir_certificate",
-        commit=False,
+        case_id, "legal_heir_certificate", commit=False,
     )
     prerequisite = remediation_tasks[-1]
     await engine.dependency_solver.add_dependency(bescom.id, prerequisite.id)
