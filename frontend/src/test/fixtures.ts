@@ -1,4 +1,4 @@
-import type { CitizenCase, Task, TaskDetail, TaskStatus } from "@/types/api";
+import type { CitizenCase, Document, Task, TaskDetail, TaskStatus } from "@/types/api";
 
 const timestamp = "2026-08-15T12:00:00Z";
 
@@ -48,6 +48,21 @@ export const pendingTask = makeTask({
     },
   ],
 });
+
+export const deathCertificate: Document = {
+  id: "document-death",
+  created_at: timestamp,
+  updated_at: timestamp,
+  case_id: "case-12345678",
+  produced_by_task_id: completedTask.id,
+  document_type: "death_certificate",
+  owner_name: "Arun Rao",
+  issuer: "BBMP South Zone",
+  issued_at: timestamp,
+  verification_status: "verified",
+  extracted_fields: {},
+  metadata: {},
+};
 
 export const citizenCase: CitizenCase = {
   id: "case-12345678",

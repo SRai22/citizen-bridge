@@ -13,10 +13,8 @@ vi.mock("next/navigation", () => ({
 afterEach(() => vi.restoreAllMocks());
 
 test("renders case metadata, task statuses, dependencies, and detail links", async () => {
-  const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-    new Response(JSON.stringify(citizenCase), {
-      headers: { "Content-Type": "application/json" },
-    }),
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+    Response.json(String(input).endsWith("/requirements") ? [] : citizenCase),
   );
 
   render(<CaseOverviewPage />);
@@ -31,8 +29,10 @@ test("renders case metadata, task statuses, dependencies, and detail links", asy
     "href",
     "/case/case-12345678/task/task-pension",
   );
-  expect(fetchMock).toHaveBeenCalledOnce();
-  const [requestUrl, requestInit] = fetchMock.mock.calls[0]!;
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+  const [requestUrl, requestInit] = fetchMock.mock.calls.find(
+    ([input]) => String(input).endsWith("/api/cases/case-12345678"),
+  )!;
 
   expect(new URL(String(requestUrl), "http://test").pathname).toBe(
     "/api/cases/case-12345678",
@@ -78,8 +78,12 @@ test("shows a replanned task and names the prerequisite blocking the failed task
       },
     ],
   });
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(
-    Response.json({ ...citizenCase, tasks: [legalHeirTask, blockedBescomTask] }),
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+    Response.json(
+      String(input).endsWith("/requirements")
+        ? []
+        : { ...citizenCase, tasks: [legalHeirTask, blockedBescomTask] },
+    ),
   );
 
   render(<CaseOverviewPage />);

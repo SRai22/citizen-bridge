@@ -6,11 +6,12 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AppHeader } from "@/components/app-header";
+import { DocumentsPanel } from "@/components/documents-panel";
 import { ErrorState, LoadingState } from "@/components/page-state";
 import { StatusBadge } from "@/components/status-badge";
-import { ApiError, getCase } from "@/lib/api";
+import { ApiError, getCase, getTaskRequirements } from "@/lib/api";
 import { caseTitle, dependencySummary, formatDate } from "@/lib/presentation";
-import type { CitizenCase } from "@/types/api";
+import type { CitizenCase, DocumentRequirement } from "@/types/api";
 
 const DependencyGraph = dynamic(
   () => import("@/components/dependency-graph").then((m) => m.DependencyGraph),
@@ -20,6 +21,9 @@ const DependencyGraph = dynamic(
 export default function CaseOverviewPage() {
   const { id } = useParams<{ id: string }>();
   const [citizenCase, setCitizenCase] = useState<CitizenCase | null>(null);
+  const [requirementsByTask, setRequirementsByTask] = useState<
+    Record<string, DocumentRequirement[]>
+  >({});
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [view, setView] = useState<"list" | "graph">("list");
@@ -27,7 +31,16 @@ export default function CaseOverviewPage() {
   useEffect(() => {
     const controller = new AbortController();
     getCase(id, controller.signal)
-      .then(setCitizenCase)
+      .then(async (loadedCase) => {
+        const requirements = await Promise.all(
+          loadedCase.tasks.map(async (task) => [
+            task.id,
+            await getTaskRequirements(id, task.id, controller.signal),
+          ] as const),
+        );
+        setRequirementsByTask(Object.fromEntries(requirements));
+        setCitizenCase(loadedCase);
+      })
       .catch((reason: unknown) => {
         if (reason instanceof Error && reason.name === "AbortError") return;
         setError(reason instanceof ApiError ? reason.message : "Something unexpected went wrong.");
@@ -142,6 +155,11 @@ export default function CaseOverviewPage() {
                 </ol>
               )}
             </section>
+
+            <DocumentsPanel
+              citizenCase={citizenCase}
+              requirementsByTask={requirementsByTask}
+            />
           </>
         ) : null}
       </main>

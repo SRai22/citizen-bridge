@@ -31,12 +31,15 @@ const STATUS_COLORS: Record<TaskStatus, { bg: string; border: string; text: stri
   blocked: { bg: "#fff1f2", border: "#fda4af", text: "#9f1239" },
 };
 
-const STATUS_ICONS: Partial<Record<TaskStatus, string>> = {
-  completed: "✓",
-  failed: "×",
-  blocked: "⊘",
-  ready: "●",
-  submitted: "↗",
+const STATUS_ICONS: Record<TaskStatus, string> = {
+  pending: "☐",
+  ready: "☐",
+  in_progress: "⏳",
+  awaiting_approval: "⏳",
+  submitted: "⏳",
+  completed: "✅",
+  failed: "🔴",
+  blocked: "🔴",
 };
 
 // -- Custom node component -----------------------------------------------------

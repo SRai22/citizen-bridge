@@ -113,7 +113,7 @@ test("reviews, clarifies, confirms, and navigates to the created case", async ()
   ).toBeInTheDocument();
   expect(screen.getByText("Arun Rao")).toBeInTheDocument();
   expect(screen.getByText("Bengaluru, Karnataka")).toBeInTheDocument();
-  expect(screen.getByText("✓ BESCOM connection")).toBeInTheDocument();
+  expect(screen.getByText("✅ BESCOM connection")).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("button", { name: "Something's wrong, let me clarify" }));
   expect(screen.getByRole("heading", { name: "Tell us what your family needs" })).toBeInTheDocument();

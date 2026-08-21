@@ -84,7 +84,7 @@ export function ProfileSummary({
                 }`}
                 key={label}
               >
-                {present ? "✓" : "—"} {label}
+                {present ? "✅" : "☐"} {label}
               </li>
             ))}
           </ul>

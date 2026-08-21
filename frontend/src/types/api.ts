@@ -90,6 +90,10 @@ export interface RequiredDocument {
   description: string | null;
 }
 
+export interface DocumentRequirement extends RequiredDocument {
+  status: "satisfied" | "missing";
+}
+
 export interface TaskDetail extends Task {
   description: string | null;
   required_documents: RequiredDocument[];

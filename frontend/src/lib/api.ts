@@ -1,6 +1,7 @@
 import type {
   ApprovalRequest,
   CitizenCase,
+  DocumentRequirement,
   ExternalApplication,
   IntakeConfirmation,
   IntakeResponse,
@@ -91,6 +92,17 @@ export function getTask(
 ): Promise<TaskDetail> {
   return request<TaskDetail>(
     `/api/cases/${encodeURIComponent(caseId)}/tasks/${encodeURIComponent(taskId)}`,
+    { signal },
+  );
+}
+
+export function getTaskRequirements(
+  caseId: string,
+  taskId: string,
+  signal?: AbortSignal,
+): Promise<DocumentRequirement[]> {
+  return request<DocumentRequirement[]>(
+    `/api/cases/${encodeURIComponent(caseId)}/tasks/${encodeURIComponent(taskId)}/requirements`,
     { signal },
   );
 }

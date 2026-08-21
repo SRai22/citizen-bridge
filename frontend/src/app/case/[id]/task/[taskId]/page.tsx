@@ -19,6 +19,7 @@ import {
   approveSubmission,
   getCase,
   getTask,
+  getTaskRequirements,
   prepareTask,
   rejectSubmission,
   updateTaskInput,
@@ -27,6 +28,7 @@ import { documentLabel, formatDateTime, statusMessage, titleCase } from "@/lib/p
 import type {
   ApprovalRequest,
   CitizenCase,
+  DocumentRequirement,
   ExternalApplication,
   TaskDetail,
 } from "@/types/api";
@@ -76,6 +78,7 @@ export default function TaskDetailPage() {
   const { id, taskId } = useParams<{ id: string; taskId: string }>();
   const [task, setTask] = useState<TaskDetail | null>(null);
   const [citizenCase, setCitizenCase] = useState<CitizenCase | null>(null);
+  const [requirements, setRequirements] = useState<DocumentRequirement[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -86,10 +89,15 @@ export default function TaskDetailPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    Promise.all([getTask(id, taskId, controller.signal), getCase(id, controller.signal)])
-      .then(([loadedTask, loadedCase]) => {
+    Promise.all([
+      getTask(id, taskId, controller.signal),
+      getCase(id, controller.signal),
+      getTaskRequirements(id, taskId, controller.signal),
+    ])
+      .then(([loadedTask, loadedCase, loadedRequirements]) => {
         setTask(loadedTask);
         setCitizenCase(loadedCase);
+        setRequirements(loadedRequirements);
         const pendingApproval = loadedTask.approval_requests.find(
           (candidate) => candidate.status === "pending",
         );
@@ -114,9 +122,14 @@ export default function TaskDetailPage() {
   }, [attempt, id, taskId]);
 
   async function refreshData() {
-    const [loadedTask, loadedCase] = await Promise.all([getTask(id, taskId), getCase(id)]);
+    const [loadedTask, loadedCase, loadedRequirements] = await Promise.all([
+      getTask(id, taskId),
+      getCase(id),
+      getTaskRequirements(id, taskId),
+    ]);
     setTask(loadedTask);
     setCitizenCase(loadedCase);
+    setRequirements(loadedRequirements);
   }
 
   async function handlePrepare(values: Record<string, unknown>, fields: TaskFormField[]) {
@@ -181,6 +194,28 @@ export default function TaskDetailPage() {
   }
 
   const tasksById = new Map(citizenCase?.tasks.map((candidate) => [candidate.id, candidate]) ?? []);
+  const displayedRequirements = [...requirements];
+  const requirementTypes = new Set(displayedRequirements.map((requirement) => requirement.type));
+  for (const dependency of task?.dependencies ?? []) {
+    const prerequisite = tasksById.get(dependency.depends_on_task_id);
+    if (
+      prerequisite?.workflow_id === "legal_heir_certificate" &&
+      !requirementTypes.has(prerequisite.workflow_id)
+    ) {
+      displayedRequirements.push({
+        type: prerequisite.workflow_id,
+        owner: "applicant",
+        description: `Produced by ${prerequisite.title}.`,
+        status: citizenCase?.documents.some(
+          (document) =>
+            document.document_type === prerequisite.workflow_id &&
+            document.verification_status !== "rejected",
+        )
+          ? "satisfied"
+          : "missing",
+      });
+    }
+  }
   const latestFailure = task?.external_applications.findLast(
     (application) => application.status === "rejected" || application.status === "error",
   );
@@ -235,7 +270,7 @@ export default function TaskDetailPage() {
                 {task.status === "completed" ? (
                   <div className="mt-5 flex items-start gap-3 rounded-2xl bg-emerald-50 px-4 py-4 text-emerald-900" role="status">
                     <span className="grid size-7 shrink-0 place-items-center rounded-full bg-emerald-700 text-sm text-white" aria-hidden="true">
-                      ✓
+                      ✅
                     </span>
                     <div>
                       <p className="text-sm font-bold">Task completed</p>
@@ -268,19 +303,47 @@ export default function TaskDetailPage() {
               <div className="grid gap-0 md:grid-cols-2">
                 <section className="p-6 sm:p-8" aria-labelledby="documents-heading">
                   <h2 id="documents-heading" className="text-lg font-bold text-slate-950">
-                    Required documents
+                    Available documents
                   </h2>
-                  {task.required_documents.length ? (
+                  {displayedRequirements.length ? (
                     <ul className="mt-5 space-y-4">
-                      {task.required_documents.map((document) => (
-                        <li className="flex gap-3" key={`${document.type}-${document.owner ?? "any"}`}>
-                          <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-cyan-50 text-sm text-cyan-800" aria-hidden="true">
-                            ▤
+                      {displayedRequirements.map((document) => {
+                        const available = document.status === "satisfied";
+                        const producer = citizenCase.tasks.find(
+                          (candidate) => candidate.workflow_id === document.type,
+                        );
+                        return (
+                          <li
+                            className="flex gap-3"
+                            key={`${document.type}-${document.owner ?? "any"}`}
+                          >
+                          <span className="mt-0.5 text-base" aria-hidden="true">
+                            {available ? "✅" : "☐"}
                           </span>
                           <span>
                             <span className="block text-sm font-bold text-slate-900">
-                              {documentLabel(document)}
+                              Required: {documentLabel(document)}
                             </span>
+                            <span
+                              className={`mt-1 block text-xs font-semibold ${available ? "text-emerald-700" : "text-slate-500"}`}
+                            >
+                              {available ? "Available" : "Not yet obtained"}
+                            </span>
+                            {!available ? (
+                              <span className="mt-1 block text-xs text-slate-500">
+                                {producer ? (
+                                  <>
+                                    Produced by:{" "}
+                                    <Link
+                                      className="font-semibold text-cyan-800"
+                                      href={`/case/${id}/task/${producer.id}`}
+                                    >
+                                      {producer.title}
+                                    </Link>
+                                  </>
+                                ) : "You provide this document"}
+                              </span>
+                            ) : null}
                             {document.description ? (
                               <span className="mt-1 block text-sm leading-5 text-slate-500">
                                 {document.description}
@@ -288,7 +351,8 @@ export default function TaskDetailPage() {
                             ) : null}
                           </span>
                         </li>
-                      ))}
+                        );
+                      })}
                     </ul>
                   ) : (
                     <p className="mt-4 text-sm text-slate-500">No documents are required.</p>
@@ -341,7 +405,7 @@ export default function TaskDetailPage() {
                       <li className="rounded-2xl border border-emerald-200 bg-white p-4" key={document.id}>
                         <div className="flex items-start gap-3">
                           <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-800" aria-hidden="true">
-                            ✓
+                            ✅
                           </span>
                           <div>
                             <p className="text-sm font-bold text-slate-950">

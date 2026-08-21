@@ -77,7 +77,7 @@ export function ApprovalDialog({
         role="dialog"
       >
         <span className="grid size-11 place-items-center rounded-2xl bg-amber-50 text-xl text-amber-800" aria-hidden="true">
-          ✓
+          ✅
         </span>
         <h2 id="approval-title" className="mt-5 text-2xl font-bold tracking-tight text-slate-950">
           Confirm this submission

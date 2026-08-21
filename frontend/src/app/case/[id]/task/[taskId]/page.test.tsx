@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
-import { citizenCase, taskDetail } from "@/test/fixtures";
+import { citizenCase, deathCertificate, makeTask, taskDetail } from "@/test/fixtures";
 import type {
   ApprovalRequest,
   ExternalApplication,
@@ -78,10 +78,17 @@ const interpretation: RejectionInterpretation = {
 test("fetches and renders full task details", async () => {
   const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = String(input);
+    if (url.endsWith("/requirements")) {
+      return Response.json(
+        taskDetail.required_documents.map((document) => ({ ...document, status: "satisfied" })),
+      );
+    }
     const payload = url.endsWith("/tasks/task-pension") ? taskDetail : citizenCase;
-    return new Response(JSON.stringify(payload), {
-      headers: { "Content-Type": "application/json" },
-    });
+    return Response.json(
+      url.endsWith("/tasks/task-pension")
+        ? payload
+        : { ...citizenCase, documents: [deathCertificate] },
+    );
   });
 
   render(<TaskDetailPage />);
@@ -91,15 +98,16 @@ test("fetches and renders full task details", async () => {
     await screen.findByRole("heading", { name: "Apply for Family Pension" }),
   ).toBeInTheDocument();
   expect(screen.getByText(taskDetail.description!)).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Required documents" })).toBeInTheDocument();
-  expect(screen.getByText("Death Certificate")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Available documents" })).toBeInTheDocument();
+  expect(screen.getByText("Required: Death Certificate")).toBeInTheDocument();
+  expect(screen.getByText("Available")).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Dependencies" })).toBeInTheDocument();
   expect(screen.getByText("Obtain Death Certificate")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Back to case" })).toHaveAttribute(
     "href",
     "/case/case-12345678",
   );
-  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(fetchMock).toHaveBeenCalledTimes(3);
 });
 
 test("prepares, confirms, and refreshes a completed submission", async () => {
@@ -107,6 +115,7 @@ test("prepares, confirms, and refreshes a completed submission", async () => {
   const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
     const method = init?.method ?? "GET";
+    if (url.endsWith("/requirements")) return Response.json([]);
     if (method === "PATCH") return Response.json(currentTask);
     if (url.endsWith("/prepare")) {
       currentTask = { ...currentTask, status: "awaiting_approval", approval_requests: [approval] };
@@ -184,6 +193,7 @@ test("cancel rejects the approval and returns the task to ready", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
     const method = init?.method ?? "GET";
+    if (url.endsWith("/requirements")) return Response.json([]);
     if (method === "PATCH") return Response.json(currentTask);
     if (url.endsWith("/prepare")) {
       currentTask = { ...currentTask, status: "awaiting_approval", approval_requests: [approval] };
@@ -230,6 +240,7 @@ test("explains a rejection and accepts the proposed remediation", async () => {
   };
   const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = String(input);
+    if (url.endsWith("/requirements")) return Response.json([]);
     if (url.endsWith("/interpret-rejection")) return Response.json(interpretation);
     if (url.endsWith("/accept-remediation")) return Response.json(citizenCase);
     return Response.json(url.endsWith("/tasks/task-pension") ? failedTask : citizenCase);
@@ -272,6 +283,7 @@ test("dismisses the recommendation without changing the failed task", async () =
   };
   const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = String(input);
+    if (url.endsWith("/requirements")) return Response.json([]);
     if (url.endsWith("/interpret-rejection")) return Response.json(interpretation);
     return Response.json(url.endsWith("/tasks/task-pension") ? failedTask : citizenCase);
   });
@@ -287,4 +299,77 @@ test("dismisses the recommendation without changing the failed task", async () =
     fetchMock.mock.calls.some(([input]) => String(input).endsWith("/accept-remediation")),
   ).toBe(false);
   expect(push).not.toHaveBeenCalled();
+});
+
+test("shows remediation documents as missing and names their producer task", async () => {
+  let legalCertificateAvailable = false;
+  const legalHeirTask = makeTask({
+    id: "task-legal-heir",
+    title: "Obtain Legal Heir Certificate",
+    workflow_id: "legal_heir_certificate",
+    status: "ready",
+  });
+  const bescomTask: TaskDetail = {
+    ...taskDetail,
+    id: "task-pension",
+    title: "Transfer BESCOM Electricity Account",
+    workflow_id: "bescom_transfer",
+    dependencies: [
+      {
+        id: "dependency-legal-heir",
+        created_at: taskDetail.created_at,
+        updated_at: taskDetail.updated_at,
+        task_id: "task-pension",
+        depends_on_task_id: legalHeirTask.id,
+        dependency_type: "completion",
+      },
+    ],
+  };
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = String(input);
+    if (url.endsWith("/requirements")) {
+      return Response.json([
+        { ...taskDetail.required_documents[0], status: "satisfied" },
+      ]);
+    }
+    return Response.json(
+      url.endsWith("/tasks/task-pension")
+        ? bescomTask
+        : {
+            ...citizenCase,
+            tasks: [citizenCase.tasks[0], legalHeirTask, bescomTask],
+            documents: [
+              deathCertificate,
+              ...(legalCertificateAvailable
+                ? [
+                    {
+                      ...deathCertificate,
+                      id: "document-legal-heir",
+                      produced_by_task_id: legalHeirTask.id,
+                      document_type: "legal_heir_certificate",
+                      issuer: "Karnataka Revenue Department",
+                    },
+                  ]
+                : []),
+            ],
+          },
+    );
+  });
+
+  const { unmount } = render(<TaskDetailPage />);
+
+  expect(await screen.findByText("Required: Death Certificate")).toBeInTheDocument();
+  expect(screen.getByText("Required: Legal Heir Certificate")).toBeInTheDocument();
+  expect(screen.getByText("Not yet obtained")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Obtain Legal Heir Certificate" })).toHaveAttribute(
+    "href",
+    "/case/case-12345678/task/task-legal-heir",
+  );
+
+  unmount();
+  legalCertificateAvailable = true;
+  render(<TaskDetailPage />);
+  const legalRequirement = await screen.findByText("Required: Legal Heir Certificate");
+  expect(within(legalRequirement.closest("li")!).getByText("Available")).toBeInTheDocument();
+  expect(screen.queryByText("Not yet obtained")).not.toBeInTheDocument();
 });
