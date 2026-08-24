@@ -207,11 +207,21 @@ services:
 
   authority:
     <<: *service-defaults
+    build:
+      context: .
+      dockerfile: services/authority/Dockerfile
+    image: citizen-bridge-authority:local
+    profiles: []
+    depends_on:
+      <<: *service-depends-on
+      auth:
+        condition: service_healthy
     environment:
       <<: *service-environment
       SERVICE_NAME: authority
       HTTP_PORT: 8002
       GRPC_PORT: 50052
+      EXPIRATION_CHECK_SECONDS: ${EXPIRATION_CHECK_SECONDS:-60}
       DATABASE_URL: postgresql+asyncpg://authority_service:${AUTHORITY_DB_PASSWORD}@postgres:5432/citizen_bridge
     expose: ["8002", "50052"]
 

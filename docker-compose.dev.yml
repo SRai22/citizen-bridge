@@ -29,21 +29,27 @@ services:
       - frontend_next_cache:/app/.next
 
   auth:
-    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --reload --host 0.0.0.0 --port 8001"
     ports: ["8001:8001", "50051:50051"]
-    volumes: &service-volumes
-      - ./services/service-template/app:/app/services/service-template/app
+    volumes:
+      - ./services/auth/app:/app/services/auth/app
+      - ./services/auth/alembic:/app/services/auth/alembic
       - ./contracts:/app/contracts
 
   authority:
-    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8002
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --reload --host 0.0.0.0 --port 8002"
     ports: ["8002:8002", "50052:50052"]
-    volumes: *service-volumes
+    volumes:
+      - ./services/authority/app:/app/services/authority/app
+      - ./services/authority/alembic:/app/services/authority/alembic
+      - ./contracts:/app/contracts
 
   case-engine:
     command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8003
     ports: ["8003:8003", "50053:50053"]
-    volumes: *service-volumes
+    volumes: &service-volumes
+      - ./services/service-template/app:/app/services/service-template/app
+      - ./contracts:/app/contracts
 
   documents:
     command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8004

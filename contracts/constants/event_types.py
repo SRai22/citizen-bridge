@@ -7,6 +7,8 @@ TASK_COMPLETED = "task.completed"
 DOCUMENT_CREATED = "document.created"
 AUTHORITY_GRANTED = "authority.granted"
 AUTHORITY_REVOKED = "authority.revoked"
+AUTHORITY_DELEGATION_CREATED = "authority.delegation_created"
+AUTHORITY_DELEGATION_REVOKED = "authority.delegation_revoked"
 NOTIFICATION_CREATED = "notification.created"
 
 EVENT_TYPES = frozenset(
@@ -20,6 +22,8 @@ EVENT_TYPES = frozenset(
         DOCUMENT_CREATED,
         AUTHORITY_GRANTED,
         AUTHORITY_REVOKED,
+        AUTHORITY_DELEGATION_CREATED,
+        AUTHORITY_DELEGATION_REVOKED,
         NOTIFICATION_CREATED,
     }
 )

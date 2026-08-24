@@ -1,0 +1,186 @@
+name: Services CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/**"
+      - "contracts/**"
+      - "infrastructure/**"
+      - "tests/**"
+      - "docker-compose*.yml"
+      - ".github/workflows/services.yml"
+  pull_request:
+    paths:
+      - "services/**"
+      - "contracts/**"
+      - "infrastructure/**"
+      - "tests/**"
+      - "docker-compose*.yml"
+      - ".github/workflows/services.yml"
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: services-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.services.outputs.changes }}
+      contracts: ${{ steps.paths.outputs.contracts }}
+      integration: ${{ steps.paths.outputs.integration }}
+      infrastructure: ${{ steps.paths.outputs.infrastructure }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: services
+        with:
+          filters: |
+            auth: services/auth/**
+            authority: services/authority/**
+            case-engine: services/case-engine/**
+            documents: services/documents/**
+            notifications: services/notifications/**
+            catalog: services/catalog/**
+            ai: services/ai/**
+      - uses: dorny/paths-filter@v3
+        id: paths
+        with:
+          filters: |
+            contracts: contracts/**
+            integration:
+              - tests/**
+              - docker-compose.test.yml
+            infrastructure:
+              - infrastructure/**
+              - docker-compose*.yml
+
+  service-tests:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.services != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.detect-changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: services/${{ matrix.service }}/pyproject.toml
+      - name: Install
+        working-directory: services/${{ matrix.service }}
+        run: pip install -e ".[dev]"
+      - name: Lint and type-check
+        working-directory: services/${{ matrix.service }}
+        run: |
+          ruff check .
+          ruff format --check .
+          mypy app
+      - name: Unit tests
+        working-directory: services/${{ matrix.service }}
+        run: pytest --cov=app --cov-report=term-missing --junitxml=unit-results.xml
+      - name: Build image
+        run: docker build -f services/${{ matrix.service }}/Dockerfile -t citizen-bridge/${{ matrix.service }}:test .
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-results-${{ matrix.service }}
+          path: services/${{ matrix.service }}/unit-results.xml
+
+  contract-tests:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: bufbuild/buf-setup-action@v1
+      - run: pip install pytest
+      - run: buf lint contracts
+      - name: Backward compatibility
+        if: github.event_name == 'pull_request'
+        run: |
+          if git cat-file -e origin/${{ github.base_ref }}:contracts/buf.yaml; then
+            buf breaking contracts --against '.git#branch=origin/${{ github.base_ref }},subdir=contracts'
+          fi
+      - run: pytest contracts/tests --junitxml=contract-results.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: contract-results
+          path: contract-results.xml
+
+  integration-tests:
+    needs: [detect-changes, service-tests, contract-tests]
+    if: >-
+      always() &&
+      (needs.service-tests.result == 'success' || needs.service-tests.result == 'skipped') &&
+      (needs.contract-tests.result == 'success' || needs.contract-tests.result == 'skipped') &&
+      (needs.detect-changes.outputs.services != '[]' ||
+       needs.detect-changes.outputs.contracts == 'true' ||
+       needs.detect-changes.outputs.integration == 'true' ||
+       needs.detect-changes.outputs.infrastructure == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pytest
+      - run: docker compose -f docker-compose.test.yml up -d --build --wait
+      - run: pytest tests/integration -v --junitxml=integration-results.xml
+      - name: Capture logs
+        if: failure()
+        run: docker compose -f docker-compose.test.yml logs --no-color > integration-logs.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-results
+          path: |
+            integration-results.xml
+            integration-logs.txt
+          if-no-files-found: ignore
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
+
+  build-push:
+    needs: integration-tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [auth, authority]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/${{ matrix.service }}/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/${{ matrix.service }}:${{ github.sha }}
+            ghcr.io/${{ github.repository }}/${{ matrix.service }}:latest

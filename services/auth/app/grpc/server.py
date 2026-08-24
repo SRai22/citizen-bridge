@@ -1,11 +1,11 @@
 from uuid import UUID
 
 import grpc
+from contracts.generated import auth_pb2, auth_pb2_grpc
 from grpc import aio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.generated import auth_pb2, auth_pb2_grpc
 from app.models import User
 from app.security import InvalidTokenError, TokenManager
 

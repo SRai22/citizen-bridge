@@ -1,9 +1,9 @@
 import bcrypt
 import pytest
+from contracts.generated import auth_pb2
 from sqlalchemy import select
 
 from app.api import login_limiter, tokens
-from app.generated import auth_pb2
 from app.grpc.server import AuthServicer
 from app.models import User
 

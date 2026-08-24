@@ -7,17 +7,21 @@ service AuthorityService {
   rpc GetUserCases(GetUserCasesRequest) returns (CaseAccessList);
   rpc GrantAccess(GrantAccessRequest) returns (GrantResponse);
   rpc RevokeAccess(RevokeAccessRequest) returns (RevokeResponse);
+  rpc RegisterCaseOwner(RegisterCaseOwnerRequest) returns (GrantResponse);
 }
 
 message CheckAccessRequest {
   string user_id = 1;
-  string case_id = 2;
-  string permission = 3;
+  string resource_type = 2;
+  string resource_id = 3;
+  string action = 4;
 }
 
 message CheckAccessResponse {
   bool allowed = 1;
   string role = 2;
+  repeated string permissions = 3;
+  repeated string limitations = 4;
 }
 
 message GetUserCasesRequest { string user_id = 1; }
@@ -32,17 +36,31 @@ message CaseAccessList { repeated CaseAccess cases = 1; }
 
 message GrantAccessRequest {
   string actor_user_id = 1;
-  string target_user_id = 2;
-  string case_id = 3;
-  string role = 4;
+  string grantee_id = 2;
+  string resource_type = 3;
+  string resource_id = 4;
+  string role = 5;
+  string expires_at = 6;
 }
 
-message GrantResponse { CaseAccess grant = 1; }
+message GrantResponse {
+  string grant_id = 1;
+  string grantee_id = 2;
+  string resource_type = 3;
+  string resource_id = 4;
+  string role = 5;
+  repeated string permissions = 6;
+}
 
 message RevokeAccessRequest {
   string actor_user_id = 1;
-  string target_user_id = 2;
-  string case_id = 3;
+  string grant_id = 2;
+  string reason = 3;
 }
 
 message RevokeResponse { bool revoked = 1; }
+
+message RegisterCaseOwnerRequest {
+  string user_id = 1;
+  string case_id = 2;
+}

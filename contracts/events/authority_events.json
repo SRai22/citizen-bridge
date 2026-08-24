@@ -3,12 +3,30 @@
   "$id": "https://citizen-bridge.local/contracts/events/authority-events-v1.json",
   "title": "Authority event payload",
   "type": "object",
-  "required": ["case_id", "user_id", "role", "timestamp"],
+  "required": ["event_type", "timestamp"],
   "properties": {
-    "case_id": {"type": "string", "format": "uuid"},
-    "user_id": {"type": "string", "format": "uuid"},
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "authority.granted",
+        "authority.revoked",
+        "authority.delegation_created",
+        "authority.delegation_revoked"
+      ]
+    },
+    "grant_id": {"type": "string", "format": "uuid"},
+    "delegation_id": {"type": "string", "format": "uuid"},
+    "grantor_id": {"type": ["string", "null"], "format": "uuid"},
+    "grantee_id": {"type": "string", "format": "uuid"},
+    "delegator_id": {"type": "string", "format": "uuid"},
+    "delegate_id": {"type": "string", "format": "uuid"},
+    "resource_type": {"type": "string"},
+    "resource_id": {"type": "string", "format": "uuid"},
+    "scope_type": {"type": "string"},
+    "scope_id": {"type": ["string", "null"], "format": "uuid"},
     "role": {"type": "string", "enum": ["owner", "coordinator", "viewer"]},
     "permissions": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "revocation_reason": {"type": ["string", "null"]},
     "timestamp": {"type": "string", "format": "date-time"}
   },
   "additionalProperties": true

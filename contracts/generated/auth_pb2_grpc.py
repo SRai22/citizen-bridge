@@ -23,13 +23,13 @@ class AuthServiceStub:
 
 
 class AuthServiceServicer:
-    async def ValidateToken(self, request, context):  # noqa: N802
+    async def ValidateToken(self, request, context):
         raise NotImplementedError
 
-    async def GetUser(self, request, context):  # noqa: N802
+    async def GetUser(self, request, context):
         raise NotImplementedError
 
-    async def GetUsers(self, request, context):  # noqa: N802
+    async def GetUsers(self, request, context):
         raise NotImplementedError
 
 
@@ -52,5 +52,9 @@ def add_AuthServiceServicer_to_server(servicer: AuthServiceServicer, server) -> 
         ),
     }
     server.add_generic_rpc_handlers(
-        (grpc.method_handlers_generic_handler("citizen_bridge.auth.v1.AuthService", handlers),)
+        (
+            grpc.method_handlers_generic_handler(
+                "citizen_bridge.auth.v1.AuthService", handlers
+            ),
+        )
     )

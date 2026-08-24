@@ -31,8 +31,10 @@ class ContractTests(unittest.TestCase):
 
     def test_constants_are_unique(self) -> None:
         self.assertEqual(ROLES, {"owner", "coordinator", "viewer"})
-        self.assertEqual(PERMISSIONS, {"view", "submit", "approve", "manage", "delete"})
-        self.assertEqual(len(EVENT_TYPES), 10)
+        self.assertEqual(
+            PERMISSIONS, {"view", "submit", "approve", "manage", "delegate", "delete"}
+        )
+        self.assertEqual(len(EVENT_TYPES), 12)
 
 
 if __name__ == "__main__":
