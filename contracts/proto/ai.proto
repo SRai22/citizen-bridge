@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package citizen_bridge.ai.v1;
+
+service AIService {
+  rpc StartIntake(StartIntakeRequest) returns (IntakeResponse);
+  rpc SendMessage(SendMessageRequest) returns (IntakeResponse);
+  rpc InterpretRejection(InterpretRejectionRequest) returns (InterpretRejectionResponse);
+}
+
+message StartIntakeRequest { string user_id = 1; }
+
+message SendMessageRequest {
+  string conversation_id = 1;
+  string message = 2;
+}
+
+message IntakeResponse {
+  string conversation_id = 1;
+  string message = 2;
+  bool ready_to_confirm = 3;
+}
+
+message InterpretRejectionRequest {
+  string task_id = 1;
+  string rejection_text = 2;
+}
+
+message InterpretRejectionResponse {
+  string reason = 1;
+  repeated string remediation_steps = 2;
+}

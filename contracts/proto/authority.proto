@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package citizen_bridge.authority.v1;
+
+service AuthorityService {
+  rpc CheckAccess(CheckAccessRequest) returns (CheckAccessResponse);
+  rpc GetUserCases(GetUserCasesRequest) returns (CaseAccessList);
+  rpc GrantAccess(GrantAccessRequest) returns (GrantResponse);
+  rpc RevokeAccess(RevokeAccessRequest) returns (RevokeResponse);
+}
+
+message CheckAccessRequest {
+  string user_id = 1;
+  string case_id = 2;
+  string permission = 3;
+}
+
+message CheckAccessResponse {
+  bool allowed = 1;
+  string role = 2;
+}
+
+message GetUserCasesRequest { string user_id = 1; }
+
+message CaseAccess {
+  string case_id = 1;
+  string role = 2;
+  repeated string permissions = 3;
+}
+
+message CaseAccessList { repeated CaseAccess cases = 1; }
+
+message GrantAccessRequest {
+  string actor_user_id = 1;
+  string target_user_id = 2;
+  string case_id = 3;
+  string role = 4;
+}
+
+message GrantResponse { CaseAccess grant = 1; }
+
+message RevokeAccessRequest {
+  string actor_user_id = 1;
+  string target_user_id = 2;
+  string case_id = 3;
+}
+
+message RevokeResponse { bool revoked = 1; }

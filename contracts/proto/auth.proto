@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package citizen_bridge.auth.v1;
+
+service AuthService {
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+  rpc GetUser(GetUserRequest) returns (UserResponse);
+}
+
+message ValidateTokenRequest { string token = 1; }
+
+message ValidateTokenResponse {
+  bool valid = 1;
+  string user_id = 2;
+  repeated string roles = 3;
+}
+
+message GetUserRequest { string user_id = 1; }
+
+message UserResponse {
+  string user_id = 1;
+  string email = 2;
+  string display_name = 3;
+}

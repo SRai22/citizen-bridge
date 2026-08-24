@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://citizen-bridge.local/contracts/events/task-events-v1.json",
+  "title": "Task event payload",
+  "type": "object",
+  "required": ["task_id", "case_id", "new_status", "timestamp"],
+  "properties": {
+    "task_id": {"type": "string", "format": "uuid"},
+    "case_id": {"type": "string", "format": "uuid"},
+    "old_status": {"type": ["string", "null"]},
+    "new_status": {"type": "string"},
+    "changed_by": {"type": ["string", "null"], "format": "uuid"},
+    "timestamp": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": true
+}

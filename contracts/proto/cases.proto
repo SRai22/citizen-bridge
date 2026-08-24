@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package citizen_bridge.cases.v1;
+
+service CaseService {
+  rpc GetCase(GetCaseRequest) returns (CaseResponse);
+  rpc ListCases(ListCasesRequest) returns (CaseList);
+}
+
+message GetCaseRequest { string case_id = 1; }
+
+message ListCasesRequest { repeated string case_ids = 1; }
+
+message CaseResponse {
+  string case_id = 1;
+  string owner_user_id = 2;
+  string status = 3;
+  string life_event_type = 4;
+}
+
+message CaseList { repeated CaseResponse cases = 1; }

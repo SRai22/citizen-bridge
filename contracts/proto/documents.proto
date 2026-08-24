@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package citizen_bridge.documents.v1;
+
+service DocumentService {
+  rpc CheckRequirements(CheckRequirementsRequest) returns (CheckRequirementsResponse);
+  rpc GetDocument(GetDocumentRequest) returns (DocumentResponse);
+}
+
+message CheckRequirementsRequest {
+  string user_id = 1;
+  repeated string document_types = 2;
+}
+
+message CheckRequirementsResponse {
+  repeated string available_types = 1;
+  repeated string missing_types = 2;
+}
+
+message GetDocumentRequest { string document_id = 1; }
+
+message DocumentResponse {
+  string document_id = 1;
+  string owner_user_id = 2;
+  string document_type = 3;
+  string verification_status = 4;
+}

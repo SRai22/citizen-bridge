@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://citizen-bridge.local/contracts/events/user-events-v1.json",
+  "title": "User event payload",
+  "type": "object",
+  "required": ["user_id", "email", "timestamp"],
+  "properties": {
+    "user_id": {"type": "string", "format": "uuid"},
+    "email": {"type": "string", "format": "email"},
+    "display_name": {"type": "string"},
+    "timestamp": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": true
+}

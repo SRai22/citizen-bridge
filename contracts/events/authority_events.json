@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://citizen-bridge.local/contracts/events/authority-events-v1.json",
+  "title": "Authority event payload",
+  "type": "object",
+  "required": ["case_id", "user_id", "role", "timestamp"],
+  "properties": {
+    "case_id": {"type": "string", "format": "uuid"},
+    "user_id": {"type": "string", "format": "uuid"},
+    "role": {"type": "string", "enum": ["owner", "coordinator", "viewer"]},
+    "permissions": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "timestamp": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": true
+}

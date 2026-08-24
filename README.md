@@ -2,9 +2,27 @@
 
 Your agent across all Indian public services.
 
-This monorepo contains a FastAPI backend and a Next.js frontend. The current
-foundation exposes a health endpoint and a placeholder UI that reports whether
-the API is available.
+Citizen Bridge is moving from a FastAPI monolith to independently deployable
+services using a strangler transition. The existing backend stays operational
+while each route moves behind a shared gateway.
+
+## Repository structure
+
+```text
+backend/         Legacy FastAPI application (kept during migration)
+frontend/        Next.js application
+services/        New services and the copyable Python service template
+contracts/       Versioned gRPC, event, constant, and observability contracts
+infrastructure/  Nginx and Kafka infrastructure assets
+docs/            Architecture and transition documentation
+tickets/         Sequenced implementation tickets
+```
+
+The implementation order is defined in
+[`docs/implementation-sequence.md`](docs/implementation-sequence.md). Shared
+contract compatibility rules are in [`contracts/README.md`](contracts/README.md),
+and route ownership is tracked in
+[`docs/strangler-transition.md`](docs/strangler-transition.md).
 
 ## Prerequisites
 
@@ -50,6 +68,8 @@ health status.
 ## Run checks
 
 ```bash
+python -m unittest discover -s contracts/tests
+
 cd backend
 ruff check .
 ruff format --check .

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://citizen-bridge.local/contracts/events/document-events-v1.json",
+  "title": "Document event payload",
+  "type": "object",
+  "required": ["document_id", "owner_user_id", "document_type", "timestamp"],
+  "properties": {
+    "document_id": {"type": "string", "format": "uuid"},
+    "owner_user_id": {"type": "string", "format": "uuid"},
+    "case_id": {"type": ["string", "null"], "format": "uuid"},
+    "document_type": {"type": "string"},
+    "timestamp": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": true
+}
