@@ -5,8 +5,10 @@ export async function GET() {
 
   try {
     const response = await fetch(`${apiUrl}/health`, { cache: "no-store" });
-    const payload: unknown = await response.json();
-    return NextResponse.json(payload, { status: response.status });
+    return NextResponse.json(
+      { status: response.ok ? "ok" : "unavailable" },
+      { status: response.ok ? 200 : 503 },
+    );
   } catch {
     return NextResponse.json({ status: "unavailable" }, { status: 503 });
   }

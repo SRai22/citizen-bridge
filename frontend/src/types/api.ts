@@ -45,6 +45,49 @@ export interface IntakeConfirmation {
   case_id: string;
 }
 
+export interface AuthSession {
+  user_id: string;
+  username: string;
+  name: string;
+}
+
+export interface LifeEventCategory {
+  id: string;
+  title: string;
+  description: string;
+}
+
+export interface CaseTask {
+  task_id: string;
+  case_id: string;
+  workflow_id: string;
+  task_type: string;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  completed_at: string | null;
+  blocked_reason: string | null;
+  blocked_by_task_ids: string[];
+}
+
+export interface CaseOverview {
+  case_id: string;
+  title: string;
+  status: CaseStatus;
+  life_event_type: string;
+  my_role: string;
+  my_permissions: string[];
+  progress: { completed: number; total: number };
+  created_at: string;
+  updated_at: string;
+  tasks_by_group: {
+    ready: CaseTask[];
+    waiting: CaseTask[];
+    blocked: CaseTask[];
+    completed: CaseTask[];
+  };
+}
+
 export interface RemediationAction {
   action: "add_task";
   workflow_id: string;

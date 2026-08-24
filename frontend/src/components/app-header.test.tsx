@@ -1,42 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, expect, test, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { expect, test } from "vitest";
 
 import { AppHeader } from "./app-header";
 
-const { push, refresh } = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
-
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh }) }));
-
-afterEach(() => {
-  vi.restoreAllMocks();
-  push.mockReset();
-  refresh.mockReset();
-});
-
-test("seeds a fresh demo and navigates to the case", async () => {
-  vi.spyOn(globalThis, "fetch")
-    .mockResolvedValueOnce(Response.json({ status: "ok" }))
-    .mockResolvedValueOnce(
-      Response.json({ case_id: "case-123", state: "initial", tasks: 4 }),
-    );
-
+test("links the brand home and identifies the current milestone", () => {
   render(<AppHeader />);
-  fireEvent.click(screen.getByRole("button", { name: "Fresh start" }));
 
-  await waitFor(() => expect(push).toHaveBeenCalledWith("/case/case-123"));
-});
-
-test("shows the backend error when reset fails", async () => {
-  vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-    Response.json(
-      { detail: { message: "Demo reset is unavailable." } },
-      { status: 503 },
-    ),
-  );
-
-  render(<AppHeader />);
-  fireEvent.click(screen.getByRole("button", { name: "Reset" }));
-
-  expect(await screen.findByRole("alert")).toHaveTextContent("Demo reset is unavailable.");
-  expect(push).not.toHaveBeenCalled();
+  expect(screen.getByRole("link", { name: /Citizen Bridge/ })).toHaveAttribute("href", "/");
+  expect(screen.getByText("Phase 0")).toBeInTheDocument();
 });

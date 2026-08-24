@@ -3,8 +3,8 @@ from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.grpc import (
-    GrpcInstrumentorClient,
-    GrpcInstrumentorServer,
+    GrpcAioInstrumentorClient,
+    GrpcAioInstrumentorServer,
 )
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
@@ -28,5 +28,5 @@ def setup_tracing(
     )
     trace.set_tracer_provider(provider)
     FastAPIInstrumentor.instrument_app(app)
-    GrpcInstrumentorClient().instrument()
-    GrpcInstrumentorServer().instrument()
+    GrpcAioInstrumentorClient().instrument()
+    GrpcAioInstrumentorServer().instrument()

@@ -3,7 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 
 import type { IntakeHouseholdProfile, IntakeResponse } from "@/types/api";
 
-import Home from "./page";
+import { IntakeChat } from "@/components/intake-chat";
 
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
 
@@ -52,7 +52,7 @@ test("starts the intake and shows messages with a pending indicator", async () =
         }),
     );
 
-  render(<Home />);
+  render(<IntakeChat />);
 
   expect(screen.getByRole("status")).toHaveTextContent("Starting a private conversation");
   expect(await screen.findByText(started.message)).toBeInTheDocument();
@@ -104,7 +104,7 @@ test("reviews, clarifies, confirms, and navigates to the created case", async ()
     )
     .mockResolvedValueOnce(jsonResponse({ case_id: "case-456" }));
 
-  render(<Home />);
+  render(<IntakeChat />);
   await screen.findByText(started.message);
   sendMessage("My father passed away");
 
@@ -132,7 +132,7 @@ test("shows an inline error and preserves the answer when a message fails", asyn
     .mockResolvedValueOnce(jsonResponse(started))
     .mockRejectedValueOnce(new TypeError("Network error"));
 
-  render(<Home />);
+  render(<IntakeChat />);
   await screen.findByText(started.message);
   sendMessage("My father passed away");
 

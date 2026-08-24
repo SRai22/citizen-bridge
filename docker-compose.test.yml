@@ -123,3 +123,61 @@ services:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
+
+  legacy-backend:
+    build:
+      context: ./backend
+      target: runner
+    environment:
+      DATABASE_URL: sqlite:///./data/citizen_bridge.db
+      DEMO_MODE: "true"
+      MOCK_AI: "true"
+    volumes:
+      - legacy_test_data:/app/data
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  nginx:
+    image: nginx:1.28.3-alpine3.23
+    depends_on:
+      auth:
+        condition: service_healthy
+      authority:
+        condition: service_healthy
+      case-engine:
+        condition: service_healthy
+      legacy-backend:
+        condition: service_healthy
+    environment:
+      FRONTEND_ORIGIN: http://localhost:13000
+      NGINX_ENVSUBST_FILTER: ^FRONTEND_ORIGIN$
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/templates/default.conf.template:ro
+    ports: ["18080:80"]
+    healthcheck:
+      test: [CMD, wget, -qO-, http://localhost/health]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  frontend:
+    build:
+      context: ./frontend
+      target: runner
+    depends_on:
+      nginx:
+        condition: service_healthy
+    environment:
+      API_URL: http://nginx
+    ports: ["13000:3000"]
+    healthcheck:
+      test: [CMD, wget, -qO-, http://127.0.0.1:3000/api/health]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  legacy_test_data:

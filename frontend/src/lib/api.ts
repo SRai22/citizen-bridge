@@ -1,16 +1,17 @@
 import type {
   ApprovalRequest,
+  AuthSession,
+  CaseOverview,
   CitizenCase,
   DocumentRequirement,
   ExternalApplication,
   IntakeConfirmation,
   IntakeResponse,
+  LifeEventCategory,
   RejectionInterpretation,
   RemediationAction,
   TaskDetail,
 } from "@/types/api";
-
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
 
 export class ApiError extends Error {
   constructor(
@@ -20,6 +21,39 @@ export class ApiError extends Error {
     super(message);
     this.name = "ApiError";
   }
+}
+
+export interface RegistrationInput {
+  username: string;
+  password: string;
+  name: string;
+  date_of_birth: string;
+  city: string;
+  state: string;
+}
+
+export function register(input: RegistrationInput): Promise<{ user_id: string }> {
+  return request("/api/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export function login(username: string, password: string): Promise<{ user_id: string }> {
+  return request("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export function getSession(signal?: AbortSignal): Promise<AuthSession> {
+  return request<AuthSession>("/api/auth/session", { signal });
+}
+
+export function getCategories(): Promise<{ categories: LifeEventCategory[] }> {
+  return request("/api/catalog/categories");
 }
 
 export function startIntake(signal?: AbortSignal): Promise<IntakeResponse> {
@@ -46,7 +80,7 @@ export function confirmIntake(sessionId: string): Promise<IntakeConfirmation> {
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
+    response = await fetch(path, {
       ...init,
       headers: { Accept: "application/json", ...init.headers },
     });
@@ -83,6 +117,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export function getCase(caseId: string, signal?: AbortSignal): Promise<CitizenCase> {
   return request<CitizenCase>(`/api/cases/${encodeURIComponent(caseId)}`, { signal });
+}
+
+export function getCaseOverview(caseId: string, signal?: AbortSignal): Promise<CaseOverview> {
+  return request<CaseOverview>(`/api/cases/${encodeURIComponent(caseId)}`, { signal });
 }
 
 export function getTask(

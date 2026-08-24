@@ -1,100 +1,77 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
-import { citizenCase, makeTask } from "@/test/fixtures";
+import type { CaseOverview } from "@/types/api";
 
 import CaseOverviewPage from "./page";
 
-vi.mock("next/navigation", () => ({
-  useParams: () => ({ id: "case-12345678" }),
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
-}));
+vi.mock("next/navigation", () => ({ useParams: () => ({ id: "case-12345678" }) }));
+
+const citizenCase: CaseOverview = {
+  case_id: "case-12345678",
+  title: "Father Death — Administrative Formalities",
+  status: "active",
+  life_event_type: "father_death",
+  my_role: "owner",
+  my_permissions: ["view", "submit", "approve", "manage"],
+  progress: { completed: 0, total: 2 },
+  created_at: "2026-08-24T12:00:00Z",
+  updated_at: "2026-08-24T12:00:00Z",
+  tasks_by_group: {
+    ready: [
+      {
+        task_id: "task-ready",
+        case_id: "case-12345678",
+        workflow_id: "death_certificate",
+        task_type: "death_registration",
+        title: "Obtain Death Certificate",
+        description: "Register the death.",
+        status: "ready",
+        completed_at: null,
+        blocked_reason: null,
+        blocked_by_task_ids: [],
+      },
+    ],
+    waiting: [],
+    blocked: [
+      {
+        task_id: "task-blocked",
+        case_id: "case-12345678",
+        workflow_id: "family_pension",
+        task_type: "family_pension_application",
+        title: "Apply for Family Pension",
+        description: "Transfer the pension.",
+        status: "pending",
+        completed_at: null,
+        blocked_reason: "Waiting for prerequisite tasks",
+        blocked_by_task_ids: ["task-ready"],
+      },
+    ],
+    completed: [],
+  },
+};
 
 afterEach(() => vi.restoreAllMocks());
 
-test("renders case metadata, task statuses, dependencies, and detail links", async () => {
-  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
-    Response.json(String(input).endsWith("/requirements") ? [] : citizenCase),
-  );
+test("renders ownership, progress and grouped tasks", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json(citizenCase));
 
   render(<CaseOverviewPage />);
 
   expect(screen.getByRole("status")).toHaveTextContent("Loading your case");
-  expect(await screen.findByRole("heading", { name: "Parent Death case" })).toBeInTheDocument();
-  expect(screen.getByText("15 Aug 2026", { exact: false })).toBeInTheDocument();
-  expect(screen.getByText("Completed")).toBeInTheDocument();
-  expect(screen.getByText("Waiting")).toBeInTheDocument();
-  expect(screen.getByText("Prerequisite complete: Obtain Death Certificate")).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: /Apply for Family Pension/ })).toHaveAttribute(
-    "href",
-    "/case/case-12345678/task/task-pension",
-  );
-  expect(fetchMock).toHaveBeenCalledTimes(3);
-  const [requestUrl, requestInit] = fetchMock.mock.calls.find(
-    ([input]) => String(input).endsWith("/api/cases/case-12345678"),
-  )!;
-
-  expect(new URL(String(requestUrl), "http://test").pathname).toBe(
-    "/api/cases/case-12345678",
-  );
-  expect(requestInit).toEqual(
-    expect.objectContaining({
-      headers: expect.objectContaining({ Accept: "application/json" }),
-      signal: expect.any(AbortSignal),
-    }),
-  );
+  expect(await screen.findByRole("heading", { name: citizenCase.title })).toBeInTheDocument();
+  expect(screen.getByText("You are the owner", { exact: false })).toBeInTheDocument();
+  expect(screen.getByText("0 of 2 tasks completed")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Ready now" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Coming next" })).toBeInTheDocument();
+  expect(screen.getByText("Waiting for prerequisite tasks")).toBeInTheDocument();
 });
 
-test("shows a retryable error when the backend is unavailable", async () => {
+test("shows a retryable error when the gateway is unavailable", async () => {
   vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Network error"));
 
   render(<CaseOverviewPage />);
 
   expect(await screen.findByRole("heading", { name: "We couldn't load this page" })).toBeInTheDocument();
-  expect(screen.getByText(/currently unreachable/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
-});
-
-test("shows a replanned task and names the prerequisite blocking the failed task", async () => {
-  const legalHeirTask = makeTask({
-    id: "task-legal-heir",
-    title: "Obtain Legal Heir Certificate",
-    workflow_id: "legal_heir_certificate",
-    status: "ready",
-  });
-  const blockedBescomTask = makeTask({
-    id: "task-bescom",
-    title: "Transfer BESCOM Electricity Account",
-    workflow_id: "bescom_transfer",
-    status: "blocked",
-    dependencies: [
-      {
-        id: "dependency-remediation",
-        created_at: citizenCase.created_at,
-        updated_at: citizenCase.updated_at,
-        task_id: "task-bescom",
-        depends_on_task_id: legalHeirTask.id,
-        dependency_type: "completion",
-      },
-    ],
-  });
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
-    Response.json(
-      String(input).endsWith("/requirements")
-        ? []
-        : { ...citizenCase, tasks: [legalHeirTask, blockedBescomTask] },
-    ),
-  );
-
-  render(<CaseOverviewPage />);
-
-  expect((await screen.findByText("Obtain Legal Heir Certificate")).closest("a")).toHaveAttribute(
-    "href",
-    "/case/case-12345678/task/task-legal-heir",
-  );
-  expect(screen.getByRole("link", { name: /Transfer BESCOM Electricity Account/ })).toHaveTextContent(
-    "Blocked by: Obtain Legal Heir Certificate",
-  );
-  expect(screen.getByText("Ready")).toBeInTheDocument();
-  expect(screen.getByText("Blocked")).toBeInTheDocument();
 });
