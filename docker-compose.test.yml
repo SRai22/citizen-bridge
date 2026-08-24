@@ -103,3 +103,23 @@ services:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
+
+  case-engine:
+    build:
+      context: .
+      dockerfile: services/case-engine/Dockerfile
+    environment:
+      SERVICE_NAME: case-engine
+      HTTP_PORT: 8003
+      GRPC_PORT: 50053
+      DATABASE_URL: postgresql+asyncpg://case_service:test-case-password@postgres:5432/citizen_bridge
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      AUTH_GRPC_HOST: auth:50051
+      AUTHORITY_GRPC_HOST: authority:50052
+      OTEL_ENABLED: "false"
+    ports: ["18003:8003"]
+    depends_on:
+      authority:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully

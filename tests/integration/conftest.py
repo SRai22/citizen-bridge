@@ -9,6 +9,7 @@ import pytest
 
 AUTH_URL = os.getenv("AUTH_URL", "http://localhost:18001")
 AUTHORITY_URL = os.getenv("AUTHORITY_URL", "http://localhost:18002")
+CASE_URL = os.getenv("CASE_URL", "http://localhost:18003")
 
 
 def request_json(
@@ -45,6 +46,6 @@ def wait_for(predicate, timeout: float = 20) -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 def services() -> Iterator[None]:
-    for base_url in (AUTH_URL, AUTHORITY_URL):
+    for base_url in (AUTH_URL, AUTHORITY_URL, CASE_URL):
         wait_for(lambda url=base_url: request_json("GET", f"{url}/health")[0] == 200)
     yield

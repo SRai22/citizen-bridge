@@ -227,11 +227,24 @@ services:
 
   case-engine:
     <<: *service-defaults
+    build:
+      context: .
+      dockerfile: services/case-engine/Dockerfile
+    image: citizen-bridge-case-engine:local
+    profiles: []
+    depends_on:
+      <<: *service-depends-on
+      auth:
+        condition: service_healthy
+      authority:
+        condition: service_healthy
     environment:
       <<: *service-environment
       SERVICE_NAME: case-engine
       HTTP_PORT: 8003
       GRPC_PORT: 50053
+      AUTH_GRPC_HOST: auth:50051
+      AUTHORITY_GRPC_HOST: authority:50052
       DATABASE_URL: postgresql+asyncpg://case_service:${CASE_DB_PASSWORD}@postgres:5432/citizen_bridge
     expose: ["8003", "50053"]
 

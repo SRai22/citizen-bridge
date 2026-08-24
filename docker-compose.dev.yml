@@ -45,16 +45,19 @@ services:
       - ./contracts:/app/contracts
 
   case-engine:
-    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8003
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --reload --host 0.0.0.0 --port 8003"
     ports: ["8003:8003", "50053:50053"]
-    volumes: &service-volumes
-      - ./services/service-template/app:/app/services/service-template/app
+    volumes:
+      - ./services/case-engine/app:/app/services/case-engine/app
+      - ./services/case-engine/alembic:/app/services/case-engine/alembic
       - ./contracts:/app/contracts
 
   documents:
     command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8004
     ports: ["8004:8004", "50054:50054"]
-    volumes: *service-volumes
+    volumes: &service-volumes
+      - ./services/service-template/app:/app/services/service-template/app
+      - ./contracts:/app/contracts
 
   notifications:
     command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8005

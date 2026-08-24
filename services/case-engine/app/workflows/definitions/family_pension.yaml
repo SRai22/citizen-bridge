@@ -1,0 +1,14 @@
+id: family_pension
+description: Transfer a deceased pensioner's family pension to the surviving spouse.
+adapter_type: family_pension
+applicability_rules:
+  - field: deceased.pension_status
+    equals: active
+  - field: surviving_spouse.exists
+    equals: true
+tasks:
+  - id: family_pension_application
+    name: Apply for Family Pension
+    estimated_duration_days: 30
+inter_workflow_dependencies:
+  - death_certificate

@@ -1,0 +1,13 @@
+id: legal_heir_certificate
+description: Obtain a certificate identifying the lawful heirs of the deceased.
+adapter_type: legal_heir_certificate
+dynamic: true
+applicability_rules:
+  - field: deceased.is_deceased
+    equals: true
+tasks:
+  - id: legal_heir_application
+    name: Apply for Legal Heir Certificate
+    estimated_duration_days: 14
+inter_workflow_dependencies:
+  - death_certificate
