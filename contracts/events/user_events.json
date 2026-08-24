@@ -3,11 +3,22 @@
   "$id": "https://citizen-bridge.local/contracts/events/user-events-v1.json",
   "title": "User event payload",
   "type": "object",
-  "required": ["user_id", "email", "timestamp"],
+  "required": ["event_type", "user_id", "timestamp"],
   "properties": {
+    "event_type": {
+      "type": "string",
+      "enum": ["user.registered", "user.profile_updated", "user.logged_in"]
+    },
     "user_id": {"type": "string", "format": "uuid"},
-    "email": {"type": "string", "format": "email"},
-    "display_name": {"type": "string"},
+    "username": {"type": "string"},
+    "name": {"type": "string"},
+    "city": {"type": "string"},
+    "changed_fields": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+    "device_info": {"type": ["string", "null"]},
     "timestamp": {"type": "string", "format": "date-time"}
   },
   "additionalProperties": true

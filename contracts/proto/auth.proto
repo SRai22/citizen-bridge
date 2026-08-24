@@ -5,6 +5,7 @@ package citizen_bridge.auth.v1;
 service AuthService {
   rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
   rpc GetUser(GetUserRequest) returns (UserResponse);
+  rpc GetUsers(GetUsersRequest) returns (UsersResponse);
 }
 
 message ValidateTokenRequest { string token = 1; }
@@ -12,13 +13,18 @@ message ValidateTokenRequest { string token = 1; }
 message ValidateTokenResponse {
   bool valid = 1;
   string user_id = 2;
-  repeated string roles = 3;
+  string username = 3;
 }
 
 message GetUserRequest { string user_id = 1; }
 
+message GetUsersRequest { repeated string user_ids = 1; }
+
 message UserResponse {
   string user_id = 1;
-  string email = 2;
-  string display_name = 3;
+  string username = 2;
+  string name = 3;
+  string city = 4;
 }
+
+message UsersResponse { repeated UserResponse users = 1; }
