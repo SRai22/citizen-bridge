@@ -93,21 +93,33 @@ detail, dependency graph, loading, and error paths without external services.
 
 ## Run with Docker
 
-Copy `.env.example` to `.env` if you need to override any defaults, then run:
+Copy the documented local configuration, then start the production-like stack:
 
 ```bash
+cp .env.example .env
 docker compose up --build
 ```
 
-The frontend is exposed on port 3000 and the backend on port 8000. Backend data
-is stored in the named `citizen_bridge_data` volume and survives container
-restarts.
+With `.env.example`, the gateway is at <http://localhost:8080>, the frontend at <http://localhost:3000>,
+and Jaeger at <http://localhost:16686>. PostgreSQL and Kafka data use named
+volumes and survive container restarts. See
+[`docs/configuration.md`](docs/configuration.md) for required variables.
+
+Start all seven placeholder services behind Nginx with:
+
+```bash
+docker compose --profile services up --build
+```
 
 For bind-mounted source and hot reload in both services:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
+
+Add `--profile services` to expose service HTTP ports `8001`–`8007` and gRPC
+ports `50051`–`50057` during development. PostgreSQL is exposed on `5432` and
+Kafka on `29092` only by the development override.
 
 Stop either stack with `docker compose down`. Add `--volumes` only when you
 intentionally want to remove persisted local data.

@@ -27,6 +27,9 @@ jobs:
     timeout-minutes: 5
     env:
       DATABASE_URL: sqlite:///./test.db
+      JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci-only-jwt-secret-at-least-32-characters' }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'ci-only-postgres-password' }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       MOCK_AI: "true"
     defaults:
       run:

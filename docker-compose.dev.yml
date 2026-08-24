@@ -1,8 +1,18 @@
 services:
-  backend:
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+  kafka:
+    ports:
+      - "${KAFKA_PORT:-29092}:29092"
+
+  legacy-backend:
     build:
       target: development
     command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    ports:
+      - "${LEGACY_BACKEND_PORT:-8000}:8000"
     restart: "no"
     volumes:
       - ./backend:/app
@@ -17,6 +27,43 @@ services:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
       - frontend_next_cache:/app/.next
+
+  auth:
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
+    ports: ["8001:8001", "50051:50051"]
+    volumes: &service-volumes
+      - ./services/service-template/app:/app/services/service-template/app
+      - ./contracts:/app/contracts
+
+  authority:
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8002
+    ports: ["8002:8002", "50052:50052"]
+    volumes: *service-volumes
+
+  case-engine:
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8003
+    ports: ["8003:8003", "50053:50053"]
+    volumes: *service-volumes
+
+  documents:
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8004
+    ports: ["8004:8004", "50054:50054"]
+    volumes: *service-volumes
+
+  notifications:
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8005
+    ports: ["8005:8005", "50055:50055"]
+    volumes: *service-volumes
+
+  catalog:
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8006
+    ports: ["8006:8006", "50056:50056"]
+    volumes: *service-volumes
+
+  ai:
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8007
+    ports: ["8007:8007", "50057:50057"]
+    volumes: *service-volumes
 
 volumes:
   frontend_node_modules:
