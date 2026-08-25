@@ -9,7 +9,7 @@ export function LoadingState({ label }: { label: string }) {
   );
 }
 
-export function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div className="mx-auto mt-20 max-w-lg rounded-3xl border border-rose-200 bg-white p-8 text-center shadow-sm">
       <span className="mx-auto grid size-11 place-items-center rounded-full bg-rose-50 text-xl text-rose-700">
@@ -17,13 +17,15 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry: () 
       </span>
       <h1 className="mt-4 text-xl font-bold text-slate-950">We couldn&apos;t load this page</h1>
       <p className="mt-2 text-sm leading-6 text-slate-600">{message}</p>
-      <button
-        className="mt-6 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:ring-offset-2"
-        onClick={onRetry}
-        type="button"
-      >
-        Try again
-      </button>
+      {onRetry ? (
+        <button
+          className="mt-6 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:ring-offset-2"
+          onClick={onRetry}
+          type="button"
+        >
+          Try again
+        </button>
+      ) : null}
     </div>
   );
 }

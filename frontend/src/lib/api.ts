@@ -1,15 +1,20 @@
 import type {
+  AccessLogEntry,
   ApprovalRequest,
   AuthSession,
   CaseOverview,
   CatalogService,
   CitizenCase,
+  DigestResponse,
+  DocDetailEntry,
+  DocEntry,
   DocumentRequirement,
   ExternalApplication,
   IntakeConfirmation,
   IntakeHouseholdProfile,
   IntakeResponse,
   LifeEventCategory,
+  NotificationItem,
   RejectionInterpretation,
   RemediationAction,
   TaskDetail,
@@ -309,3 +314,35 @@ export function seedDemo(
 ): Promise<SeedResponse> {
   return request<SeedResponse>(`/api/demo/seed?state=${state}`, { method: "POST" });
 }
+
+export function getDocuments(
+  category?: string,
+): Promise<{ documents_by_category: Record<string, DocEntry[]> }> {
+  const qs = category ? `?category=${encodeURIComponent(category)}` : "";
+  return request(`/api/docs${qs}`);
+}
+
+export function getDocumentDetail(id: string): Promise<DocDetailEntry> {
+  return request(`/api/docs/${encodeURIComponent(id)}`);
+}
+
+export function getDocumentAccessLog(id: string): Promise<{ accesses: AccessLogEntry[] }> {
+  return request(`/api/docs/${encodeURIComponent(id)}/access-log`);
+}
+
+export function getNotifications(opts?: {
+  type?: string;
+  limit?: number;
+}): Promise<{ notifications: NotificationItem[]; unread_count: number }> {
+  const search = new URLSearchParams();
+  if (opts?.type) search.set("type", opts.type);
+  if (opts?.limit) search.set("limit", String(opts.limit));
+  const qs = search.toString();
+  return request(`/api/notifications${qs ? `?${qs}` : ""}`);
+}
+
+export function getDigest(week?: string): Promise<DigestResponse> {
+  const qs = week ? `?week=${encodeURIComponent(week)}` : "";
+  return request(`/api/notifications/digest${qs}`);
+}
+

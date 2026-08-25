@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DependencyGraph, type DependencyGraphTask } from "@/components/dependency-graph";
 import { ErrorState, LoadingState } from "@/components/page-state";
 import { StatusBadge } from "@/components/status-badge";
+import { WaitingState } from "@/components/waiting-state";
 import { ApiError, getCaseOverview } from "@/lib/api";
 import { formatDate, formatDateTime } from "@/lib/presentation";
 import type { CaseOverview, CaseTask } from "@/types/api";
@@ -134,16 +135,3 @@ function TaskCard({ allTasks, caseId, kind, task }: { allTasks: CaseTask[]; case
   );
 }
 
-function WaitingState({ task }: { task: CaseTask }) {
-  const wait = task.wait_state;
-  if (wait?.stages_known && wait.stages.length) {
-    const current = wait.stages.findIndex((stage) => stage.id === wait.current_stage);
-    return (
-      <ol aria-label="Application progress" className="mt-4 flex flex-wrap gap-2">
-        {wait.stages.map((stage, index) => <li className={`rounded-full px-3 py-1 text-xs font-semibold ${index <= current ? "bg-teal-100 text-teal-900" : "bg-slate-100 text-slate-500"}`} key={stage.id}>{stage.label}</li>)}
-      </ol>
-    );
-  }
-  const estimate = wait?.estimated_wait;
-  return <p className="mt-3 text-sm font-medium text-slate-500">{task.wait_summary ?? (estimate?.max_days ? `Usually ${estimate.min_days ?? 1}–${estimate.max_days} days. We’ll notify you.` : "We’ll notify you when there’s an update.")}</p>;
-}

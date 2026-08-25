@@ -211,6 +211,66 @@ export interface Document {
   metadata: Record<string, unknown>;
 }
 
+export type DocCategory = "identity" | "certificates" | "address" | "income" | "family";
+export type DocProvenanceType = "platform_issued" | "user_uploaded" | "digilocker" | "auto_fetched";
+export type DocVerification = "pending" | "verified" | "expired" | "rejected";
+
+export interface DocEntry {
+  id: string;
+  document_type: string;
+  proof_category: DocCategory;
+  title: string;
+  issuer: string | null;
+  issued_at: string | null;
+  valid_from: string | null;
+  valid_until: string | null;
+  verification_status: DocVerification;
+  provenance_type: DocProvenanceType;
+  provenance_source: string | null;
+  source_case_id: string | null;
+  source_task_id: string | null;
+  extracted_fields: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  superseded_by_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccessLogEntry {
+  id: string;
+  action: "viewed" | "shared" | "submitted" | "downloaded";
+  purpose: string | null;
+  recipient: string | null;
+  case_id: string | null;
+  task_id: string | null;
+  accessed_at: string;
+}
+
+export interface DocDetailEntry extends DocEntry {
+  usage_history: AccessLogEntry[];
+}
+
+export interface NotificationItem {
+  id: string;
+  user_id: string;
+  notification_type: string;
+  priority: "urgent" | "normal" | "low";
+  title: string;
+  body: string;
+  data: Record<string, unknown>;
+  read: boolean;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface DigestResponse {
+  week: string;
+  ready_actions: NotificationItem[];
+  new_opportunities: NotificationItem[];
+  status_updates: NotificationItem[];
+  completions: NotificationItem[];
+}
+
 export interface LifeEvent {
   id: string;
   event_type: string;
