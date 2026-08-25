@@ -26,10 +26,11 @@ export class ApiError extends Error {
 export interface RegistrationInput {
   username: string;
   password: string;
-  name: string;
-  date_of_birth: string;
-  city: string;
-  state: string;
+  name?: string;
+  date_of_birth?: string;
+  city?: string;
+  state?: string;
+  phone?: string;
 }
 
 export function register(input: RegistrationInput): Promise<{ user_id: string }> {
@@ -50,6 +51,20 @@ export function login(username: string, password: string): Promise<{ user_id: st
 
 export function getSession(signal?: AbortSignal): Promise<AuthSession> {
   return request<AuthSession>("/api/auth/session", { signal });
+}
+
+export function updateProfile(input: {
+  name?: string;
+  date_of_birth?: string;
+  city?: string;
+  state?: string;
+  phone?: string;
+}): Promise<AuthSession> {
+  return request<AuthSession>("/api/auth/me", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
 }
 
 export function getCategories(): Promise<{ categories: LifeEventCategory[] }> {

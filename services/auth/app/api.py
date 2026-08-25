@@ -92,6 +92,7 @@ async def register(
         date_of_birth=payload.date_of_birth,
         city=payload.city,
         state=payload.state,
+        phone=payload.phone,
     )
     session.add(user)
     try:

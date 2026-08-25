@@ -55,7 +55,7 @@ class AuthServicer(auth_pb2_grpc.AuthServiceServicer):
 
 def _user_response(user: User):
     return auth_pb2.UserResponse(
-        user_id=str(user.id), username=user.username, name=user.name, city=user.city
+        user_id=str(user.id), username=user.username, name=user.name or "", city=user.city or ""
     )
 
 

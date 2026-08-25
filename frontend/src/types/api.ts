@@ -48,7 +48,10 @@ export interface IntakeConfirmation {
 export interface AuthSession {
   user_id: string;
   username: string;
-  name: string;
+  name: string | null;
+  date_of_birth?: string | null;
+  city?: string | null;
+  phone?: string | null;
 }
 
 export interface LifeEventCategory {

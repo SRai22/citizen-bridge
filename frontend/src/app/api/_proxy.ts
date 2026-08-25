@@ -8,39 +8,48 @@ export async function proxyBackendRequest(
   const apiUrl = process.env.API_URL ?? "http://localhost:8000";
   const requestBody = body ?? (request.method === "GET" ? undefined : await request.text());
   const contentType = request.headers.get("content-type");
-  const headers = new Headers({ Accept: "application/json" });
-  if (contentType || body) headers.set("Content-Type", contentType ?? "application/json");
-  const token = request.cookies.get("access_token")?.value;
+  const accessToken = request.cookies.get("access_token")?.value;
+  const refreshToken = request.cookies.get("refresh_token")?.value;
   const correlationId = request.headers.get("x-correlation-id");
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  if (correlationId) headers.set("X-Correlation-ID", correlationId);
 
   try {
-    const response = await fetch(`${apiUrl}${backendPath}${request.nextUrl.search}`, {
-      method: request.method,
-      headers,
-      body: requestBody || undefined,
-      cache: "no-store",
-    });
-    const payload = await response.text();
-    const result = new NextResponse(payload, {
-      status: response.status,
-      headers: {
-        "Content-Type": response.headers.get("content-type") ?? "application/json",
-        ...(response.headers.get("x-correlation-id")
-          ? { "X-Correlation-ID": response.headers.get("x-correlation-id")! }
-          : {}),
-      },
-    });
-    if (response.ok && backendPath === "/api/auth/login") {
-      const tokens = JSON.parse(payload) as { access_token: string; refresh_token: string };
-      result.cookies.set("access_token", tokens.access_token, cookieOptions(request, 15 * 60));
-      result.cookies.set(
-        "refresh_token",
-        tokens.refresh_token,
-        cookieOptions(request, 7 * 24 * 60 * 60),
-      );
-    } else if (backendPath === "/api/auth/logout") {
+    let response = await backendFetch(
+      `${apiUrl}${backendPath}${request.nextUrl.search}`,
+      request.method,
+      requestBody,
+      contentType,
+      correlationId,
+      accessToken,
+    );
+    let rotatedTokens: Tokens | null = null;
+    if (response.status === 401 && refreshToken && canRefresh(backendPath)) {
+      const refreshed = await fetch(`${apiUrl}/api/auth/refresh`, {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+        cache: "no-store",
+      });
+      if (refreshed.ok) {
+        rotatedTokens = (await refreshed.json()) as Tokens;
+        response = await backendFetch(
+          `${apiUrl}${backendPath}${request.nextUrl.search}`,
+          request.method,
+          requestBody,
+          contentType,
+          correlationId,
+          rotatedTokens.access_token,
+        );
+      }
+    }
+
+    let payload = await response.text();
+    if (response.ok && isSessionStart(backendPath)) {
+      rotatedTokens = JSON.parse(payload) as Tokens;
+      payload = JSON.stringify({ user_id: rotatedTokens.user_id });
+    }
+    const result = backendResponse(response, payload);
+    if (rotatedTokens) setTokenCookies(result, request, rotatedTokens);
+    if (backendPath === "/api/auth/logout") {
       result.cookies.delete("access_token");
       result.cookies.delete("refresh_token");
     }
@@ -53,6 +62,62 @@ export async function proxyBackendRequest(
   }
 }
 
+interface Tokens {
+  user_id?: string;
+  access_token: string;
+  refresh_token: string;
+}
+
+function backendFetch(
+  url: string,
+  method: string,
+  body: string | undefined,
+  contentType: string | null,
+  correlationId: string | null,
+  token?: string,
+) {
+  const headers = new Headers({ Accept: "application/json" });
+  if (contentType || body) headers.set("Content-Type", contentType ?? "application/json");
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (correlationId) headers.set("X-Correlation-ID", correlationId);
+  return fetch(url, { method, headers, body: body || undefined, cache: "no-store" });
+}
+
+function backendResponse(response: Response, payload: string) {
+  return new NextResponse(payload, {
+    status: response.status,
+    headers: {
+      "Content-Type": response.headers.get("content-type") ?? "application/json",
+      ...(response.headers.get("x-correlation-id")
+        ? { "X-Correlation-ID": response.headers.get("x-correlation-id")! }
+        : {}),
+    },
+  });
+}
+
+function canRefresh(path: string) {
+  return !["/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/api/auth/logout"].includes(path);
+}
+
+function isSessionStart(path: string) {
+  return path === "/api/auth/login" || path === "/api/auth/register";
+}
+
+function setTokenCookies(result: NextResponse, request: NextRequest, tokens: Tokens) {
+  result.cookies.set("access_token", tokens.access_token, cookieOptions(request, 15 * 60));
+  result.cookies.set(
+    "refresh_token",
+    tokens.refresh_token,
+    cookieOptions(request, 7 * 24 * 60 * 60),
+  );
+}
+
 function cookieOptions(request: NextRequest, maxAge: number) {
-  return { httpOnly: true, maxAge, sameSite: "lax" as const, secure: request.nextUrl.protocol === "https:" };
+  return {
+    httpOnly: true,
+    maxAge,
+    path: "/",
+    sameSite: "lax" as const,
+    secure: request.nextUrl.protocol === "https:",
+  };
 }

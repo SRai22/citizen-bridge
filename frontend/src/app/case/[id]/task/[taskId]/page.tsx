@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { AppHeader } from "@/components/app-header";
 import { ApprovalDialog } from "@/components/approval-dialog";
 import { ErrorState, LoadingState } from "@/components/page-state";
 import { RejectionReplan } from "@/components/rejection-replan";
@@ -222,9 +221,7 @@ export default function TaskDetailPage() {
   const failureMessage = latestFailure ? resultError(latestFailure) : null;
 
   return (
-    <div className="min-h-screen">
-      <AppHeader />
-      <main className="mx-auto max-w-4xl px-5 py-8 sm:px-8 sm:py-12">
+    <div className="mx-auto max-w-4xl py-2 sm:py-3">
         {loadError ? (
           <ErrorState
             message={loadError}
@@ -424,7 +421,6 @@ export default function TaskDetailPage() {
             </article>
           </>
         ) : null}
-      </main>
 
       {approval ? (
         <ApprovalDialog

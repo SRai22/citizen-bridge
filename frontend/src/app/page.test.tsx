@@ -1,152 +1,71 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
-import type { IntakeHouseholdProfile, IntakeResponse } from "@/types/api";
+import { ServicesHome } from "@/components/services-home";
 
-import { IntakeChat } from "@/components/intake-chat";
+const { replace, router } = vi.hoisted(() => {
+  const stableReplace = vi.fn();
+  return { replace: stableReplace, router: { replace: stableReplace } };
+});
 
-const { push } = vi.hoisted(() => ({ push: vi.fn() }));
-
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
-
-const profile: IntakeHouseholdProfile = {
-  deceased: {
-    name: "Arun Rao",
-    relationship: "father",
-    occupation: "retired Karnataka state government employee",
-    pension_status: "active",
-  },
-  surviving_members: [
-    {
-      name: "Meera Rao",
-      relationship: "spouse",
-      occupation: "homemaker",
-      pension_status: "none",
-    },
-  ],
-  location: { city: "Bengaluru", state: "Karnataka" },
-  assets: { bescom: true, ration_card: true, property: false },
-};
-
-const started: IntakeResponse = {
-  session_id: "session-123",
-  status: "in_progress",
-  message: "I’m sorry you’re going through this. What happened?",
-  profile: null,
-};
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
 afterEach(() => {
   vi.restoreAllMocks();
-  push.mockReset();
+  replace.mockReset();
 });
 
-test("starts the intake and shows messages with a pending indicator", async () => {
-  let resolveMessage: ((response: Response) => void) | undefined;
-  const fetchMock = vi
-    .spyOn(globalThis, "fetch")
-    .mockResolvedValueOnce(jsonResponse(started))
-    .mockImplementationOnce(
-      () =>
-        new Promise<Response>((resolve) => {
-          resolveMessage = resolve;
+test("loads the signed-in user's service categories and starts intake", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const url = String(input);
+    if (url.endsWith("/api/auth/session")) {
+      return Promise.resolve(
+        Response.json({
+          user_id: "user-1",
+          username: "asha",
+          name: "Asha Rao",
+          date_of_birth: "1992-04-03",
+          city: "Bengaluru",
         }),
+      );
+    }
+    if (url.endsWith("/api/catalog/categories")) {
+      return Promise.resolve(Response.json({
+        categories: [
+          { id: "bereavement", title: "Someone Passed Away", description: "Build a plan." },
+        ],
+      }));
+    }
+    if (url.endsWith("/api/intake/start")) {
+      return Promise.resolve(Response.json({
+        session_id: "intake-1",
+        status: "in_progress",
+        message: "What happened?",
+        profile: null,
+      }));
+    }
+    return Promise.reject(new Error(`Unexpected request: ${url}`));
+  });
+
+  render(<ServicesHome />);
+
+  expect(screen.getByRole("status")).toHaveTextContent("Loading your services");
+  expect(await screen.findByRole("heading", { name: "Welcome, Asha Rao" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /Someone Passed Away/ }));
+  expect(await screen.findByText("What happened?")).toBeInTheDocument();
+});
+
+test("sends a new user to onboarding", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const url = String(input);
+    return Promise.resolve(
+      url.endsWith("/api/auth/session")
+        ? Response.json({ detail: "Missing bearer token" }, { status: 401 })
+        : Response.json({ categories: [] }),
     );
-
-  render(<IntakeChat />);
-
-  expect(screen.getByRole("status")).toHaveTextContent("Starting a private conversation");
-  expect(await screen.findByText(started.message)).toBeInTheDocument();
-
-  fireEvent.change(screen.getByLabelText("Your message"), {
-    target: { value: "My father passed away" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
-  expect(screen.getByText("My father passed away")).toBeInTheDocument();
-  expect(screen.getByRole("status")).toHaveTextContent("Thinking");
+  render(<ServicesHome />);
 
-  resolveMessage?.(
-    jsonResponse({
-      ...started,
-      message: "Which city and state did he live in?",
-    }),
-  );
-  expect(await screen.findByText("Which city and state did he live in?")).toBeInTheDocument();
-  expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
-  expect(fetchMock).toHaveBeenCalledTimes(2);
-  expect(fetchMock.mock.calls[1]?.[0]).toMatch(/\/api\/intake\/session-123\/message$/);
-  expect(fetchMock.mock.calls[1]?.[1]).toEqual(
-    expect.objectContaining({
-      method: "POST",
-      body: JSON.stringify({ message: "My father passed away" }),
-    }),
-  );
+  await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/onboarding"));
 });
-
-test("reviews, clarifies, confirms, and navigates to the created case", async () => {
-  vi.spyOn(globalThis, "fetch")
-    .mockResolvedValueOnce(jsonResponse(started))
-    .mockResolvedValueOnce(
-      jsonResponse({
-        ...started,
-        status: "complete",
-        message: "I have enough information to prepare your plan.",
-        profile,
-      }),
-    )
-    .mockResolvedValueOnce(
-      jsonResponse({
-        ...started,
-        status: "complete",
-        message: "Thanks, I updated that detail.",
-        profile: { ...profile, deceased: { ...profile.deceased, name: "Anil Rao" } },
-      }),
-    )
-    .mockResolvedValueOnce(jsonResponse({ case_id: "case-456" }));
-
-  render(<IntakeChat />);
-  await screen.findByText(started.message);
-  sendMessage("My father passed away");
-
-  expect(
-    await screen.findByRole("heading", { name: "Here's what I understood" }),
-  ).toBeInTheDocument();
-  expect(screen.getByText("Arun Rao")).toBeInTheDocument();
-  expect(screen.getByText("Bengaluru, Karnataka")).toBeInTheDocument();
-  expect(screen.getByText("✅ BESCOM connection")).toBeInTheDocument();
-
-  fireEvent.click(screen.getByRole("button", { name: "Something's wrong, let me clarify" }));
-  expect(screen.getByRole("heading", { name: "Tell us what your family needs" })).toBeInTheDocument();
-  expect(screen.getByText("My father passed away")).toBeInTheDocument();
-  expect(screen.getByText("I have enough information to prepare your plan.")).toBeInTheDocument();
-
-  sendMessage("His name was Anil Rao");
-  expect(await screen.findByText("Anil Rao")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Looks correct, create my plan" }));
-
-  await waitFor(() => expect(push).toHaveBeenCalledWith("/case/case-456"));
-});
-
-test("shows an inline error and preserves the answer when a message fails", async () => {
-  vi.spyOn(globalThis, "fetch")
-    .mockResolvedValueOnce(jsonResponse(started))
-    .mockRejectedValueOnce(new TypeError("Network error"));
-
-  render(<IntakeChat />);
-  await screen.findByText(started.message);
-  sendMessage("My father passed away");
-
-  expect(await screen.findByRole("alert")).toHaveTextContent("currently unreachable");
-  expect(screen.getByLabelText("Your message")).toHaveValue("My father passed away");
-});
-
-function sendMessage(message: string) {
-  fireEvent.change(screen.getByLabelText("Your message"), { target: { value: message } });
-  fireEvent.click(screen.getByRole("button", { name: "Send" }));
-}
-
-function jsonResponse(body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    headers: { "Content-Type": "application/json" },
-  });
-}

@@ -68,6 +68,41 @@ async def test_auth_session_lifecycle(api_context) -> None:
 
 
 @pytest.mark.asyncio
+async def test_phone_registration_can_resume_profile_completion(api_context) -> None:
+    client, _, _ = api_context
+
+    registered = await client.post(
+        "/api/auth/register",
+        json={
+            "username": "phone_9876543210",
+            "password": "generated-secret",
+            "phone": "+919876543210",
+        },
+    )
+    assert registered.status_code == 201
+    headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
+
+    partial = await client.get("/api/auth/me", headers=headers)
+    assert partial.status_code == 200
+    assert partial.json()["phone"] == "+919876543210"
+    assert partial.json()["name"] is None
+
+    completed = await client.patch(
+        "/api/auth/me",
+        headers=headers,
+        json={
+            "name": "Asha Rao",
+            "date_of_birth": "1990-04-12",
+            "city": "Bengaluru",
+            "state": "Karnataka",
+        },
+    )
+    assert completed.status_code == 200
+    assert completed.json()["name"] == "Asha Rao"
+    assert completed.json()["date_of_birth"] == "1990-04-12"
+
+
+@pytest.mark.asyncio
 async def test_login_rate_limit(api_context) -> None:
     client, _, _ = api_context
     await login_limiter.clear("missing")
