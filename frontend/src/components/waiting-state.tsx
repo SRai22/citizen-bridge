@@ -70,7 +70,7 @@ function TimelineWait({ wait }: { wait: WaitData }) {
           <span className="text-slate-400"> · Updated {formatDate(wait.last_update)}</span>
         )}
       </p>
-      <p className="mt-1 text-xs text-slate-400">We'll notify you when there's an update.</p>
+      <p className="mt-1 text-xs text-slate-400">We&apos;ll notify you when there&apos;s an update.</p>
     </div>
   );
 }
@@ -104,10 +104,10 @@ function StatusCardWait({ wait }: { wait: WaitData | null }) {
       ) : null}
       {overdue ? (
         <p className="mt-2 font-medium text-amber-700">
-          Taking longer than usual. We're monitoring.
+          Taking longer than usual. We&apos;re monitoring.
         </p>
       ) : null}
-      <p className="mt-2 text-slate-400">📱 We'll notify you when there's an update.</p>
+      <p className="mt-2 text-slate-400">📱 We&apos;ll notify you when there&apos;s an update.</p>
     </div>
   );
 }

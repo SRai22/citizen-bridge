@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 
 import { ProvenanceTag } from "@/components/provenance-tag";
 import { ErrorState, LoadingState } from "@/components/page-state";
-import { StatusBadge } from "@/components/status-badge";
 import { ApiError, getDocuments } from "@/lib/api";
 import { formatDate } from "@/lib/presentation";
 import type { DocCategory, DocEntry } from "@/types/api";
