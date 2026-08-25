@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
 os.environ.setdefault("OTEL_ENABLED", "false")
 
-from app.api import auth_client, authority_client, publisher
+from app.api import auth_client, authority_client, catalog_client, publisher
 from app.clients import AccessContext, UserContext
 from app.db.base import Base
 from app.db.session import get_session
@@ -55,6 +55,53 @@ class FakePublisher:
         self.events.append((topic, event))
 
 
+class FakeCatalog:
+    async def list_applicable(self, profile: dict[str, object]) -> list[dict]:
+        if profile.get("location", {}).get("state") != "Karnataka":
+            raise ValueError(
+                "Workflow 'family_pension' requires inactive workflow(s): death_certificate"
+            )
+        values = (
+            ("death_certificate", "death_registration", "Obtain Death Certificate", 7, []),
+            (
+                "family_pension",
+                "family_pension_application",
+                "Apply for Family Pension",
+                30,
+                ["death_certificate"],
+            ),
+            (
+                "bescom_transfer",
+                "bescom_name_transfer",
+                "Transfer BESCOM Account",
+                15,
+                ["death_certificate"],
+            ),
+            (
+                "ration_card",
+                "ration_card_modification",
+                "Update Ration Card",
+                30,
+                ["death_certificate"],
+            ),
+        )
+        return [
+            {
+                "id": workflow_id,
+                "description": title,
+                "tasks": [
+                    {
+                        "id": task_id,
+                        "name": title,
+                        "estimated_duration_days": days,
+                    }
+                ],
+                "inter_workflow_dependencies": dependencies,
+            }
+            for workflow_id, task_id, title, days, dependencies in values
+        ]
+
+
 @pytest_asyncio.fixture
 async def case_context():
     engine = create_async_engine(
@@ -76,6 +123,7 @@ async def case_context():
     app.dependency_overrides[get_session] = override_session
     app.dependency_overrides[auth_client] = lambda: auth
     app.dependency_overrides[authority_client] = lambda: authority
+    app.dependency_overrides[catalog_client] = lambda: FakeCatalog()
     app.dependency_overrides[publisher] = lambda: events
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

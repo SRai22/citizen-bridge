@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.clients import AccessContext, AuthClient, AuthorityClient, UserContext
+from app.clients import AccessContext, AuthClient, AuthorityClient, CatalogClient, UserContext
 from app.db import get_session
 from app.kafka import EventPublisher
 from app.models import Task
@@ -47,9 +47,14 @@ def publisher(request: Request) -> EventPublisher:
     return request.app.state.publisher
 
 
+def catalog_client(request: Request) -> CatalogClient:
+    return request.app.state.catalog_client
+
+
 AuthDep = Annotated[AuthClient, Depends(auth_client)]
 AuthorityDep = Annotated[AuthorityClient, Depends(authority_client)]
 PublisherDep = Annotated[EventPublisher, Depends(publisher)]
+CatalogDep = Annotated[CatalogClient, Depends(catalog_client)]
 
 
 async def current_user(credentials: CredentialsDep, auth: AuthDep) -> AsyncIterator[UserContext]:
@@ -90,9 +95,12 @@ async def create(
     session: SessionDep,
     events: PublisherDep,
     authority: AuthorityDep,
+    catalog: CatalogDep,
 ) -> CaseDetail:
     try:
-        case, decision = await create_case(session, events, authority, UUID(user.user_id), payload)
+        case, decision = await create_case(
+            session, events, authority, catalog, UUID(user.user_id), payload
+        )
     except ConnectionError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
     except ValueError as exc:

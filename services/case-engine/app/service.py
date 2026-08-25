@@ -28,11 +28,14 @@ from app.schemas import (
     TaskResponse,
     WaitState,
 )
-from app.workflow_loader import load_workflows
 
 
 class Publisher(Protocol):
     async def publish(self, topic: str, event: dict[str, Any]) -> None: ...
+
+
+class WorkflowCatalog(Protocol):
+    async def list_applicable(self, profile: dict[str, object]) -> list[dict]: ...
 
 
 VALID_TRANSITIONS = {
@@ -56,6 +59,7 @@ async def create_case(
     session: AsyncSession,
     publisher: Publisher,
     authority: AuthorityClient,
+    catalog: WorkflowCatalog,
     user_id: UUID,
     payload: CaseCreate,
 ) -> tuple[Case, AccessContext]:
@@ -82,7 +86,7 @@ async def create_case(
     session.add(case)
     await session.flush()
 
-    definitions = load_workflows(event.context)
+    definitions = await catalog.list_applicable(event.context)
     tasks_by_workflow: dict[str, Task] = {}
     for definition in definitions:
         task_definition = definition["tasks"][0]

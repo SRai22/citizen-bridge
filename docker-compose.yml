@@ -243,6 +243,8 @@ services:
         condition: service_healthy
       authority:
         condition: service_healthy
+      catalog:
+        condition: service_healthy
     environment:
       <<: *service-environment
       SERVICE_NAME: case-engine
@@ -250,6 +252,7 @@ services:
       GRPC_PORT: 50053
       AUTH_GRPC_HOST: auth:50051
       AUTHORITY_GRPC_HOST: authority:50052
+      CATALOG_GRPC_HOST: catalog:50056
       DATABASE_URL: postgresql+asyncpg://case_service:${CASE_DB_PASSWORD}@postgres:5432/citizen_bridge
     expose: ["8003", "50053"]
 
@@ -276,6 +279,11 @@ services:
 
   catalog:
     <<: *service-defaults
+    build:
+      context: .
+      dockerfile: services/catalog/Dockerfile
+    image: citizen-bridge-catalog:local
+    profiles: []
     environment:
       <<: *service-environment
       SERVICE_NAME: catalog

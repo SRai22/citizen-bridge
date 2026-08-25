@@ -12,45 +12,23 @@ from contracts.lib.observability import (
     setup_tracing,
 )
 from fastapi import FastAPI
-from sqlalchemy import text
 from starlette.responses import JSONResponse, Response
 
 from app.api import router
-from app.clients import AuthClient, AuthorityClient, CatalogClient
+from app.catalog import Catalog
 from app.config import settings
-from app.db.session import engine, session_factory
 from app.grpc import create_server
-from app.kafka import EventPublisher
 
 started_at = datetime.now(UTC)
 logger = configure_logging(settings.service_name)
-
-
-async def check_database() -> None:
-    async with engine.connect() as connection:
-        await connection.execute(text("SELECT 1"))
+catalog = Catalog(settings.catalog_data_dir)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    auth = AuthClient(settings.auth_grpc_host)
-    authority = AuthorityClient(settings.authority_grpc_host)
-    catalog_client = CatalogClient(settings.catalog_grpc_host)
-    events = EventPublisher(settings.kafka_bootstrap_servers)
-    await events.start()
-    grpc_server = create_server(settings.grpc_port, session_factory)
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    catalog.reload()
+    grpc_server = create_server(settings.grpc_port, catalog)
     await grpc_server.start()
-    app.state.auth_client = auth
-    app.state.authority_client = authority
-    app.state.catalog_client = catalog_client
-    app.state.publisher = events
-    app.state.health_checks = {
-        "database": check_database,
-        "kafka": events.check,
-        "auth": auth.check,
-        "authority": authority.check,
-        "catalog": catalog_client.check,
-    }
     logger.info(
         "service.started",
         extra={"http_port": settings.http_port, "grpc_port": settings.grpc_port},
@@ -59,19 +37,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         await grpc_server.stop(grace=5)
-        await events.stop()
-        await authority.close()
-        await catalog_client.close()
-        await auth.close()
-        await engine.dispose()
 
 
-app = FastAPI(
-    title="Citizen Bridge Case Engine",
-    version=settings.service_version,
-    lifespan=lifespan,
-)
-app.state.health_checks = {"database": check_database}
+app = FastAPI(title="Citizen Bridge Catalog", version=settings.service_version, lifespan=lifespan)
+app.state.catalog = catalog
+app.state.health_checks = {"catalog": catalog.check}
 app.include_router(router)
 app.middleware("http")(http_metrics_middleware)
 app.middleware("http")(correlation_middleware)

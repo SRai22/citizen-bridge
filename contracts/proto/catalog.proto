@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package citizen_bridge.catalog.v1;
+
+service CatalogService {
+  rpc GetWorkflowDefinition(WorkflowRequest) returns (WorkflowDefinition);
+  rpc GetServiceDefinition(ServiceRequest) returns (ServiceDefinition);
+  rpc ListApplicableWorkflows(ProfileContext) returns (WorkflowList);
+}
+
+message WorkflowRequest { string workflow_id = 1; }
+
+message ServiceRequest { string service_id = 1; }
+
+message ProfileContext { string profile_json = 1; }
+
+message WorkflowDefinition { string definition_json = 1; }
+
+message ServiceDefinition { string definition_json = 1; }
+
+message WorkflowList { repeated WorkflowDefinition workflows = 1; }

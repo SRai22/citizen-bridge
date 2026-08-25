@@ -1,7 +1,15 @@
+import json
 from dataclasses import dataclass
 
 import grpc
-from contracts.generated import auth_pb2, auth_pb2_grpc, authority_pb2, authority_pb2_grpc
+from contracts.generated import (
+    auth_pb2,
+    auth_pb2_grpc,
+    authority_pb2,
+    authority_pb2_grpc,
+    catalog_pb2,
+    catalog_pb2_grpc,
+)
 
 
 @dataclass
@@ -74,6 +82,29 @@ class AuthorityClient:
         except grpc.aio.AioRpcError as exc:
             raise ConnectionError("Authority service unavailable") from exc
         return AccessContext(True, response.role, list(response.permissions))
+
+    async def check(self) -> None:
+        await self.channel.channel_ready()
+
+    async def close(self) -> None:
+        await self.channel.close()
+
+
+class CatalogClient:
+    def __init__(self, target: str) -> None:
+        self.channel = grpc.aio.insecure_channel(target)
+        self.stub = catalog_pb2_grpc.CatalogServiceStub(self.channel)
+
+    async def list_applicable(self, profile: dict[str, object]) -> list[dict]:
+        try:
+            response = await self.stub.ListApplicableWorkflows(
+                catalog_pb2.ProfileContext(profile_json=json.dumps(profile))
+            )
+        except grpc.aio.AioRpcError as exc:
+            if exc.code() == grpc.StatusCode.INVALID_ARGUMENT:
+                raise ValueError(exc.details()) from exc
+            raise ConnectionError("Catalog service unavailable") from exc
+        return [json.loads(workflow.definition_json) for workflow in response.workflows]
 
     async def check(self) -> None:
         await self.channel.channel_ready()
