@@ -92,3 +92,43 @@ class DelegationResponse(BaseModel):
     valid_from: datetime
     valid_until: datetime | None
     status: str
+
+
+class DelegationRequestCreate(BaseModel):
+    delegate_to_user_id: UUID
+    scope_type: Literal["case"] = "case"
+    scope_id: UUID
+    role: Literal["coordinator"] = "coordinator"
+    message: str | None = Field(default=None, max_length=500)
+    expires_at: datetime | None = None
+
+    @field_validator("expires_at")
+    @classmethod
+    def future_request_expiry(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value <= datetime.now(UTC):
+            raise ValueError("expires_at must be in the future")
+        return value
+
+
+class DelegationRequestResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    delegation_request_id: UUID = Field(validation_alias="id")
+    from_user_id: UUID
+    to_user_id: UUID
+    scope_type: str
+    scope_id: UUID
+    role: str
+    message: str | None
+    status: str
+    expires_at: datetime | None
+    delegation_id: UUID | None
+    created_at: datetime
+
+
+class CaseAccessEntry(BaseModel):
+    user_id: UUID
+    name: str | None = None
+    role: str
+    granted_at: datetime
+    granted_by: UUID | None = None

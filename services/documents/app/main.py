@@ -48,7 +48,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         async with session_factory() as session:
             await consume_task_completed(session, publisher, event)
 
-    consumer = TaskConsumer(settings.kafka_bootstrap_servers, task_completed)
+    consumer = TaskConsumer(
+        settings.kafka_bootstrap_servers, session_factory, task_completed
+    )
     await publisher.start()
     grpc_server = create_server(settings.grpc_port, session_factory, publisher)
     await grpc_server.start()

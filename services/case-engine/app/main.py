@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -21,6 +22,7 @@ from app.config import settings
 from app.db.session import engine, session_factory
 from app.grpc import create_server
 from app.kafka import EventPublisher
+from app.service import mark_overdue_tasks
 
 started_at = datetime.now(UTC)
 logger = configure_logging(settings.service_name)
@@ -29,6 +31,13 @@ logger = configure_logging(settings.service_name)
 async def check_database() -> None:
     async with engine.connect() as connection:
         await connection.execute(text("SELECT 1"))
+
+
+async def overdue_loop() -> None:
+    while True:
+        await asyncio.sleep(settings.overdue_check_seconds)
+        async with session_factory() as session:
+            await mark_overdue_tasks(session)
 
 
 @asynccontextmanager
@@ -40,6 +49,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await events.start()
     grpc_server = create_server(settings.grpc_port, session_factory)
     await grpc_server.start()
+    overdue_task = asyncio.create_task(overdue_loop(), name="case-overdue-tasks")
     app.state.auth_client = auth
     app.state.authority_client = authority
     app.state.catalog_client = catalog_client
@@ -58,6 +68,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        overdue_task.cancel()
+        try:
+            await overdue_task
+        except asyncio.CancelledError:
+            pass
         await grpc_server.stop(grace=5)
         await events.stop()
         await authority.close()

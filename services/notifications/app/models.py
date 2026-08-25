@@ -45,3 +45,12 @@ class NotificationPreference(Base):
     urgent_push: Mapped[bool] = mapped_column(Boolean, default=True)
     categories: Mapped[dict] = mapped_column(MutableDict.as_mutable(JSON), default=dict)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
+class ProcessedEvent(Base):
+    __tablename__ = "processed_events"
+    __table_args__ = ({"schema": "notifications"},)
+
+    event_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    consumer_group: Mapped[str] = mapped_column(String(100))

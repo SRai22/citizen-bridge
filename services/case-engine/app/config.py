@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     catalog_grpc_host: str = "catalog:50056"
     http_port: int = 8003
     grpc_port: int = 50053
+    overdue_check_seconds: int = 3600
     otel_enabled: bool = False
     otel_exporter_otlp_endpoint: str = "http://jaeger:4317"
 

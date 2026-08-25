@@ -3,10 +3,11 @@ from uuid import uuid4
 
 import pytest
 from contracts.generated import documents_pb2
+from contracts.lib.events import EventConsumer
 from sqlalchemy import select
 
 from app.grpc.server import DocumentServicer
-from app.models import Document
+from app.models import Document, ProcessedEvent
 from app.service import consume_task_completed, expire_documents
 
 
@@ -124,3 +125,20 @@ async def test_grpc_checks_document_requirements(document_context) -> None:
 
     assert response.available_types == ["death_certificate"]
     assert response.missing_types == ["aadhaar"]
+
+
+@pytest.mark.asyncio
+async def test_consumer_tracks_processed_events(document_context) -> None:
+    _, sessions, _ = document_context
+    consumer = EventConsumer(
+        "unused:9092",
+        "documents-test",
+        ("tasks",),
+        sessions,
+        ProcessedEvent,
+    )
+    event_id = str(uuid4())
+
+    assert await consumer._seen(event_id) is False
+    await consumer._mark(event_id)
+    assert await consumer._seen(event_id) is True

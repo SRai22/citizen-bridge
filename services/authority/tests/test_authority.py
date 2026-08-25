@@ -174,6 +174,20 @@ async def test_grpc_registers_case_owner(authority_context) -> None:
     assert registered.role == "owner"
     assert checked.allowed is True
 
+    coordinator_id, coordinated_case_id, subject_id = uuid4(), uuid4(), uuid4()
+    coordinated = await servicer.RegisterCaseCoordinator(
+        authority_pb2.RegisterCaseCoordinatorRequest(
+            user_id=str(coordinator_id),
+            case_id=str(coordinated_case_id),
+            subject_person_id=str(subject_id),
+            relationship="mother",
+        ),
+        AbortContext(),
+    )
+    assert coordinated.role == "coordinator"
+    assert publisher.events[-1]["event_type"] == "authority.coordinator_assigned"
+    assert publisher.events[-1]["subject_person_id"] == str(subject_id)
+
 
 @pytest.mark.asyncio
 async def test_case_users_include_direct_and_delegated_access(authority_context) -> None:
@@ -197,6 +211,40 @@ async def test_case_users_include_direct_and_delegated_access(authority_context)
         authority_pb2.GetCaseUsersRequest(case_id=str(case_id)), AbortContext()
     )
     assert set(response.user_ids) == {str(owner_id), str(coordinator_id), str(delegate_id)}
+
+
+@pytest.mark.asyncio
+async def test_delegation_request_acceptance(authority_context) -> None:
+    client, sessions, publisher, users = authority_context
+    owner_id, delegate_id, case_id = uuid4(), uuid4(), uuid4()
+    users.update({owner_id, delegate_id})
+    async with sessions() as session:
+        await create_grant(session, publisher, None, owner_id, "case", case_id, "owner")
+
+    requested = await client.post(
+        "/api/authority/delegations/request",
+        headers=auth(owner_id),
+        json={
+            "delegate_to_user_id": str(delegate_id),
+            "scope_id": str(case_id),
+            "message": "Please coordinate this case",
+        },
+    )
+    assert requested.status_code == 201, requested.text
+    request_id = requested.json()["delegation_request_id"]
+
+    accepted = await client.post(
+        f"/api/authority/delegations/requests/{request_id}/accept",
+        headers=auth(delegate_id),
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["status"] == "accepted"
+
+    access_list = await client.get(
+        f"/api/authority/cases/{case_id}/access", headers=auth(owner_id)
+    )
+    assert {item["role"] for item in access_list.json()} == {"owner", "coordinator"}
+    assert publisher.events[-1]["event_type"] == "authority.delegation_accepted"
 
 
 @pytest.mark.asyncio

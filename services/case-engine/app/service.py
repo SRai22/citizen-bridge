@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -17,6 +17,7 @@ from app.models import (
     Task,
     TaskDependency,
     TaskStatus,
+    TaskWaitState,
 )
 from app.schemas import (
     CaseCreate,
@@ -90,6 +91,10 @@ async def create_case(
     tasks_by_workflow: dict[str, Task] = {}
     for definition in definitions:
         task_definition = definition["tasks"][0]
+        duration = definition.get("typical_duration_days") or (
+            1,
+            task_definition["estimated_duration_days"],
+        )
         task = Task(
             case_id=case.id,
             workflow_id=definition["id"],
@@ -98,10 +103,24 @@ async def create_case(
             description=definition["description"],
             estimated_duration_days=task_definition["estimated_duration_days"],
             status=TaskStatus.PENDING,
+            wait_state=TaskWaitState(
+                stages_known=bool(definition.get("stages")),
+                stages=definition.get("stages", []),
+                estimated_wait_days_min=duration[0],
+                estimated_wait_days_max=duration[1],
+            ),
         )
         session.add(task)
         tasks_by_workflow[definition["id"]] = task
     await session.flush()
+
+    if payload.subject_person_index is not None:
+        if household is None or payload.subject_person_index >= len(household.people):
+            raise ValueError("subject_person_index does not identify a household member")
+        subject = household.people[payload.subject_person_index]
+        case.subject_person_id = subject.id
+        case.coordinator_user_id = user_id
+        case.subject_relationship = payload.subject_relationship or subject.relationship
 
     dependent_ids: set[UUID] = set()
     for definition in definitions:
@@ -123,7 +142,16 @@ async def create_case(
     await session.commit()
 
     try:
-        access = await authority.register_owner(str(user_id), str(case.id))
+        access = (
+            await authority.register_coordinator(
+                str(user_id),
+                str(case.id),
+                str(case.subject_person_id),
+                case.subject_relationship or "",
+            )
+            if case.coordinator_user_id
+            else await authority.register_owner(str(user_id), str(case.id))
+        )
     except Exception:
         await session.delete(case)
         await session.commit()
@@ -166,6 +194,7 @@ async def get_case(session: AsyncSession, case_id: UUID) -> Case | None:
             selectinload(Case.life_event),
             selectinload(Case.household_profile).selectinload(HouseholdProfile.people),
             selectinload(Case.tasks).selectinload(Task.dependencies),
+            selectinload(Case.tasks).selectinload(Task.wait_state),
         )
     )
 
@@ -176,7 +205,10 @@ async def list_cases(session: AsyncSession, case_ids: list[UUID]) -> list[Case]:
     result = await session.scalars(
         select(Case)
         .where(Case.id.in_(case_ids))
-        .options(selectinload(Case.tasks))
+        .options(
+            selectinload(Case.tasks),
+            selectinload(Case.household_profile).selectinload(HouseholdProfile.people),
+        )
         .order_by(Case.updated_at.desc())
     )
     return list(result.unique().all())
@@ -198,6 +230,16 @@ async def transition_task(
         task.output_data.update(output_data)
     if status == TaskStatus.COMPLETED:
         task.completed_at = datetime.now(UTC)
+    wait = task.wait_state
+    now = datetime.now(UTC)
+    if wait:
+        wait.last_status_update_at = now
+        if status == TaskStatus.SUBMITTED:
+            wait.submitted_at = wait.submitted_at or now
+            wait.current_stage = wait.current_stage or (
+                str(wait.stages[0]["id"]) if wait.stages else "submitted"
+            )
+            wait.stage_entered_at = now
     session.add(
         AuditEntry(
             case_id=task.case_id,
@@ -233,6 +275,65 @@ async def transition_task(
     return task
 
 
+async def advance_stage(
+    session: AsyncSession,
+    publisher: Publisher,
+    task: Task,
+    stage: str,
+    user_id: UUID,
+) -> TaskWaitState:
+    wait = task.wait_state
+    if wait is None or not wait.stages_known:
+        raise ValueError("This workflow does not expose processing stages")
+    stage_ids = [str(item["id"]) for item in wait.stages]
+    if stage not in stage_ids:
+        raise ValueError("Unknown workflow stage")
+    if wait.current_stage and stage_ids.index(stage) < stage_ids.index(wait.current_stage):
+        raise ValueError("Cannot move a task to an earlier stage")
+    now = datetime.now(UTC)
+    wait.current_stage = stage
+    wait.stage_entered_at = now
+    wait.last_status_update_at = now
+    await session.commit()
+    await publisher.publish(
+        "tasks",
+        _event(
+            "task.stage_advanced",
+            task_id=str(task.id),
+            case_id=str(task.case_id),
+            new_stage=stage,
+            changed_by=str(user_id),
+            new_status=task.status.value,
+        ),
+    )
+    return wait
+
+
+async def mark_overdue_tasks(session: AsyncSession) -> int:
+    now = datetime.now(UTC)
+    waits = (
+        await session.scalars(
+            select(TaskWaitState).where(
+                TaskWaitState.submitted_at.is_not(None),
+                TaskWaitState.estimated_wait_days_max.is_not(None),
+                TaskWaitState.is_overdue.is_(False),
+            )
+        )
+    ).all()
+    overdue = [
+        wait
+        for wait in waits
+        if wait.submitted_at
+        and wait.estimated_wait_days_max is not None
+        and wait.submitted_at + timedelta(days=wait.estimated_wait_days_max) < now
+    ]
+    for wait in overdue:
+        wait.is_overdue = True
+    if overdue:
+        await session.commit()
+    return len(overdue)
+
+
 def case_summary(case: Case, role: str) -> CaseSummary:
     completed = sum(task.status == TaskStatus.COMPLETED for task in case.tasks)
     return CaseSummary(
@@ -256,6 +357,7 @@ def case_detail(case: Case, access: AccessContext) -> CaseDetail:
             for dependency in task.dependencies
             if task_by_id[dependency.depends_on_task_id].status != TaskStatus.COMPLETED
         ]
+        wait_state = _wait_state(task)
         response = TaskResponse(
             task_id=task.id,
             case_id=case.id,
@@ -267,17 +369,8 @@ def case_detail(case: Case, access: AccessContext) -> CaseDetail:
             completed_at=task.completed_at,
             blocked_reason=("Waiting for prerequisite tasks" if blocked_by else None),
             blocked_by_task_ids=blocked_by,
-            wait_state=(
-                WaitState(
-                    status_label="Processing",
-                    estimated_wait={"min_days": 1, "max_days": task.estimated_duration_days},
-                    last_update=task.updated_at,
-                    is_overdue=False,
-                    message="We'll notify you when there's an update.",
-                )
-                if task.status in {TaskStatus.SUBMITTED, TaskStatus.AWAITING_APPROVAL}
-                else None
-            ),
+            wait_state=wait_state,
+            wait_summary=_wait_summary(wait_state),
         )
         if task.status == TaskStatus.COMPLETED:
             groups.completed.append(response)
@@ -288,25 +381,35 @@ def case_detail(case: Case, access: AccessContext) -> CaseDetail:
         else:
             groups.ready.append(response)
 
-    deceased = next(
+    subject = next(
         (
             person
             for person in (case.household_profile.people if case.household_profile else [])
-            if person.is_deceased
+            if person.id == case.subject_person_id
         ),
         None,
     )
+    if subject is None and case.subject_person_id is None:
+        subject = next(
+            (
+                person
+                for person in (case.household_profile.people if case.household_profile else [])
+                if person.is_deceased
+            ),
+            None,
+        )
     summary = case_summary(case, access.role)
     return CaseDetail(
         **summary.model_dump(),
         my_permissions=access.permissions,
+        limitations=access.limitations,
         subject=(
             SubjectResponse(
-                person_id=deceased.id,
-                name=deceased.name,
-                relationship=deceased.relationship,
+                person_id=subject.id,
+                name=subject.name,
+                relationship=case.subject_relationship or subject.relationship,
             )
-            if deceased
+            if subject
             else None
         ),
         tasks_by_group=groups,
@@ -315,6 +418,50 @@ def case_detail(case: Case, access: AccessContext) -> CaseDetail:
             "occurred_at": case.life_event.occurred_at,
         },
     )
+
+
+def _wait_state(task: Task) -> WaitState | None:
+    wait = task.wait_state
+    if wait is None or task.status not in {
+        TaskStatus.PENDING,
+        TaskStatus.SUBMITTED,
+        TaskStatus.AWAITING_APPROVAL,
+    }:
+        return None
+    stage_ids = [str(item["id"]) for item in wait.stages]
+    current = stage_ids.index(wait.current_stage) if wait.current_stage in stage_ids else -1
+    stages = [
+        {
+            **stage,
+            "completed": index < current,
+            "current": index == current,
+        }
+        for index, stage in enumerate(wait.stages)
+    ]
+    return WaitState(
+        stages_known=wait.stages_known,
+        stages=stages,
+        current_stage=wait.current_stage,
+        status_label=None if wait.stages_known else "Processing",
+        submitted_at=wait.submitted_at,
+        estimated_wait={
+            "min_days": wait.estimated_wait_days_min,
+            "max_days": wait.estimated_wait_days_max,
+        },
+        last_update=wait.last_status_update_at or task.updated_at,
+        is_overdue=wait.is_overdue,
+        message=None if wait.stages_known else "We'll notify you when there's an update.",
+    )
+
+
+def _wait_summary(wait: WaitState | None) -> str | None:
+    if wait is None:
+        return None
+    stage = wait.current_stage.replace("_", " ").title() if wait.current_stage else "Waiting"
+    minimum = wait.estimated_wait.get("min_days")
+    maximum = wait.estimated_wait.get("max_days")
+    estimate = f"~{minimum}-{maximum} days" if minimum is not None and maximum else "ETA unknown"
+    return f"{stage} · {estimate} · Last update: {wait.last_update.date().isoformat()}"
 
 
 def _event(event_type: str, **fields: Any) -> dict[str, Any]:

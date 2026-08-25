@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.kafka import EventPublisher
 from app.models import AuthorityGrant
 from app.service import (
+    assign_case_coordinator,
     check_access,
     create_grant,
     list_case_users,
@@ -136,6 +137,26 @@ class AuthorityServicer(authority_pb2_grpc.AuthorityServiceServicer):
                 "case",
                 case_id,
                 "owner",
+            )
+        return _grant_response(grant)
+
+    async def RegisterCaseCoordinator(self, request, context):  # noqa: N802
+        try:
+            user_id = UUID(request.user_id)
+            case_id = UUID(request.case_id)
+            subject_person_id = (
+                UUID(request.subject_person_id) if request.subject_person_id else None
+            )
+        except ValueError:
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Invalid UUID")
+        async with self.sessions() as session:
+            grant = await assign_case_coordinator(
+                session,
+                self.publisher,
+                user_id,
+                case_id,
+                subject_person_id,
+                request.relationship or None,
             )
         return _grant_response(grant)
 

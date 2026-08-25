@@ -116,13 +116,73 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       AUTH_GRPC_HOST: auth:50051
       AUTHORITY_GRPC_HOST: authority:50052
+      CATALOG_GRPC_HOST: catalog:50056
       OTEL_ENABLED: "false"
     ports: ["18003:8003"]
     depends_on:
       authority:
         condition: service_healthy
+      catalog:
+        condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
+
+  documents:
+    build:
+      context: .
+      dockerfile: services/documents/Dockerfile
+    environment:
+      SERVICE_NAME: documents
+      HTTP_PORT: 8004
+      GRPC_PORT: 50054
+      DATABASE_URL: postgresql+asyncpg://document_service:test-document-password@postgres:5432/citizen_bridge
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      AUTH_GRPC_HOST: auth:50051
+      EXPIRATION_CHECK_SECONDS: 1
+      OTEL_ENABLED: "false"
+    ports: ["18004:8004"]
+    depends_on:
+      auth:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+
+  notifications:
+    build:
+      context: .
+      dockerfile: services/notifications/Dockerfile
+    environment:
+      SERVICE_NAME: notifications
+      HTTP_PORT: 8005
+      GRPC_PORT: 50055
+      DATABASE_URL: postgresql+asyncpg://notification_service:test-notification-password@postgres:5432/citizen_bridge
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      AUTH_GRPC_HOST: auth:50051
+      AUTHORITY_GRPC_HOST: authority:50052
+      OTEL_ENABLED: "false"
+    ports: ["18005:8005"]
+    depends_on:
+      auth:
+        condition: service_healthy
+      authority:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+
+  catalog:
+    build:
+      context: .
+      dockerfile: services/catalog/Dockerfile
+    environment:
+      SERVICE_NAME: catalog
+      HTTP_PORT: 8006
+      GRPC_PORT: 50056
+      DATABASE_URL: postgresql+asyncpg://catalog_service:test-catalog-password@postgres:5432/citizen_bridge
+      OTEL_ENABLED: "false"
+    ports: ["18006:8006"]
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   legacy-backend:
     build:
@@ -148,6 +208,12 @@ services:
       authority:
         condition: service_healthy
       case-engine:
+        condition: service_healthy
+      documents:
+        condition: service_healthy
+      notifications:
+        condition: service_healthy
+      catalog:
         condition: service_healthy
       legacy-backend:
         condition: service_healthy

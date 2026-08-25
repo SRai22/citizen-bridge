@@ -34,11 +34,17 @@ class HouseholdCreate(RequestModel):
 class CaseCreate(RequestModel):
     life_event: LifeEventCreate
     household_profile: HouseholdCreate | None = None
+    subject_person_index: int | None = Field(default=None, ge=0)
+    subject_relationship: str | None = Field(default=None, max_length=100)
 
 
 class TaskTransition(RequestModel):
     status: TaskStatus
     output_data: dict[str, Any] = Field(default_factory=dict)
+
+
+class TaskStageAdvance(RequestModel):
+    stage: str = Field(min_length=1, max_length=100)
 
 
 class Progress(BaseModel):
@@ -47,11 +53,15 @@ class Progress(BaseModel):
 
 
 class WaitState(BaseModel):
-    status_label: str
-    estimated_wait: dict[str, int]
-    last_update: datetime
+    stages_known: bool
+    stages: list[dict[str, Any]] = Field(default_factory=list)
+    current_stage: str | None = None
+    status_label: str | None = None
+    submitted_at: datetime | None = None
+    estimated_wait: dict[str, int | None]
+    last_update: datetime | None
     is_overdue: bool
-    message: str
+    message: str | None = None
 
 
 class TaskResponse(BaseModel):
@@ -66,6 +76,7 @@ class TaskResponse(BaseModel):
     blocked_reason: str | None = None
     blocked_by_task_ids: list[UUID] = Field(default_factory=list)
     wait_state: WaitState | None = None
+    wait_summary: str | None = None
 
 
 class TaskGroups(BaseModel):
@@ -98,6 +109,7 @@ class CaseListResponse(BaseModel):
 
 class CaseDetail(CaseSummary):
     my_permissions: list[str]
+    limitations: list[str] = Field(default_factory=list)
     subject: SubjectResponse | None
     tasks_by_group: TaskGroups
     life_event: dict[str, Any]
@@ -108,3 +120,10 @@ class CaseCreated(CaseDetail):
 
 
 CaseStatusFilter = Literal["intake", "active", "completed", "abandoned"]
+
+
+class SetSubjectRequest(RequestModel):
+    case_id: UUID
+    subject_person_id: UUID
+    relationship: str = Field(min_length=1, max_length=100)
+    role: Literal["coordinator"] = "coordinator"

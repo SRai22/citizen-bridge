@@ -5,8 +5,18 @@ from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Index, String, UniqueConstraint
-from sqlalchemy.ext.mutable import MutableDict
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+)
+from sqlalchemy.ext.mutable import MutableDict, MutableList
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.orm import relationship as orm_relationship
 
@@ -55,6 +65,9 @@ class Case(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     status: Mapped[CaseStatus] = enum_column(CaseStatus, CaseStatus.INTAKE)
     life_event_type: Mapped[str] = mapped_column(String(100), index=True)
     profile: Mapped[dict[str, Any]] = json_column()
+    subject_person_id: Mapped[UUID | None] = mapped_column(index=True)
+    coordinator_user_id: Mapped[UUID | None] = mapped_column(index=True)
+    subject_relationship: Mapped[str | None] = mapped_column(String(100))
     tasks: Mapped[list[Task]] = orm_relationship(
         back_populates="case", cascade="all, delete-orphan", passive_deletes=True
     )
@@ -130,6 +143,30 @@ class Task(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    wait_state: Mapped[TaskWaitState | None] = orm_relationship(
+        back_populates="task", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class TaskWaitState(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "task_wait_states"
+    __table_args__ = {"schema": "cases"}
+
+    task_id: Mapped[UUID] = mapped_column(
+        ForeignKey("cases.tasks.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    stages_known: Mapped[bool] = mapped_column(Boolean, default=False)
+    stages: Mapped[list[dict[str, Any]]] = mapped_column(
+        MutableList.as_mutable(JSON), default=list
+    )
+    current_stage: Mapped[str | None] = mapped_column(String(100))
+    stage_entered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    estimated_wait_days_min: Mapped[int | None] = mapped_column(Integer)
+    estimated_wait_days_max: Mapped[int | None] = mapped_column(Integer)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_status_update_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    is_overdue: Mapped[bool] = mapped_column(Boolean, default=False)
+    task: Mapped[Task] = orm_relationship(back_populates="wait_state")
 
 
 class TaskDependency(UUIDPrimaryKeyMixin, TimestampMixin, Base):

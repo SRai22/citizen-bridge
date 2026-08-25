@@ -10,6 +10,8 @@ import pytest
 AUTH_URL = os.getenv("AUTH_URL", "http://localhost:18001")
 AUTHORITY_URL = os.getenv("AUTHORITY_URL", "http://localhost:18002")
 CASE_URL = os.getenv("CASE_URL", "http://localhost:18003")
+DOCUMENT_URL = os.getenv("DOCUMENT_URL", "http://localhost:18004")
+NOTIFICATION_URL = os.getenv("NOTIFICATION_URL", "http://localhost:18005")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:13000")
 GATEWAY_URL = os.getenv("GATEWAY_URL", "http://localhost:18080")
 
@@ -48,7 +50,13 @@ def wait_for(predicate, timeout: float = 20) -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 def services() -> Iterator[None]:
-    for base_url in (AUTH_URL, AUTHORITY_URL, CASE_URL):
+    for base_url in (
+        AUTH_URL,
+        AUTHORITY_URL,
+        CASE_URL,
+        DOCUMENT_URL,
+        NOTIFICATION_URL,
+    ):
         wait_for(lambda url=base_url: request_json("GET", f"{url}/health")[0] == 200)
     wait_for(lambda: request_json("GET", f"{FRONTEND_URL}/api/health")[0] == 200)
     yield

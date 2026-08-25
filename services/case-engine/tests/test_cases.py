@@ -1,6 +1,12 @@
-from uuid import uuid4
+from datetime import UTC, datetime, timedelta
+from uuid import UUID, uuid4
 
 import pytest
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+
+from app.models import Task
+from app.service import mark_overdue_tasks
 
 
 def headers(user_id) -> dict[str, str]:
@@ -39,7 +45,7 @@ def payload() -> dict[str, object]:
 
 @pytest.mark.asyncio
 async def test_authenticated_case_flow(case_context) -> None:
-    client, _, users, _, events = case_context
+    client, sessions, users, _, events = case_context
     user_id, outsider_id = uuid4(), uuid4()
     users.update({user_id, outsider_id})
 
@@ -66,9 +72,33 @@ async def test_authenticated_case_flow(case_context) -> None:
         json={"status": "submitted"},
     )
     assert transitioned.status_code == 200
-    assert transitioned.json()["wait_state"]["status_label"] == "Processing"
+    assert transitioned.json()["wait_state"]["stages_known"] is True
+    assert transitioned.json()["wait_state"]["current_stage"] == "submitted"
     assert [event[1]["event_type"] for event in events.events].count("task.created") == 4
     assert events.events[-1][1]["event_type"] == "task.status_changed"
+
+    advanced = await client.post(
+        f"/api/cases/{case_id}/tasks/{task_id}/stage",
+        headers=headers(user_id),
+        json={"stage": "under_review"},
+    )
+    assert advanced.status_code == 200, advanced.text
+    assert advanced.json()["wait_state"]["current_stage"] == "under_review"
+    assert events.events[-1][1]["event_type"] == "task.stage_advanced"
+
+    async with sessions() as session:
+        task = await session.scalar(
+            select(Task).where(Task.id == UUID(task_id)).options(selectinload(Task.wait_state))
+        )
+        task.wait_state.submitted_at = datetime.now(UTC) - timedelta(days=10)
+        task.wait_state.estimated_wait_days_max = 1
+        await session.commit()
+        assert await mark_overdue_tasks(session) == 1
+
+    overdue = await client.get(
+        f"/api/cases/{case_id}/tasks/{task_id}", headers=headers(user_id)
+    )
+    assert overdue.json()["wait_state"]["is_overdue"] is True
 
     completed = await client.post(
         f"/api/cases/{case_id}/tasks/{task_id}/transition",
@@ -97,3 +127,46 @@ async def test_rejects_inconsistent_workflow_profile(case_context) -> None:
     response = await client.post("/api/cases", headers=headers(user_id), json=invalid)
     assert response.status_code == 422
     assert "requires inactive workflow" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_case_can_be_created_for_a_family_member(case_context) -> None:
+    client, _, users, _, events = case_context
+    user_id = uuid4()
+    users.add(user_id)
+    case_payload = payload()
+    case_payload["subject_person_index"] = 0
+    case_payload["subject_relationship"] = "father"
+
+    created = await client.post(
+        "/api/cases", headers=headers(user_id), json=case_payload
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["my_role"] == "coordinator"
+    assert created.json()["subject"]["name"] == "Rajesh Kumar"
+    assert created.json()["limitations"]
+
+    context = await client.get("/api/cases/context/for-whom", headers=headers(user_id))
+    assert context.status_code == 200
+    family = next(option for option in context.json()["options"] if option["type"] == "family")
+    assert family["members"][0]["relationship"] == "father"
+    assert any(
+        event[1]["event_type"] == "case.created" for event in events.events
+    )
+
+    case_id = created.json()["case_id"]
+    task_id = created.json()["tasks_by_group"]["ready"][0]["task_id"]
+    for next_status in ("in_progress", "awaiting_approval"):
+        transitioned = await client.post(
+            f"/api/cases/{case_id}/tasks/{task_id}/transition",
+            headers=headers(user_id),
+            json={"status": next_status},
+        )
+        assert transitioned.status_code == 200, transitioned.text
+    forbidden = await client.post(
+        f"/api/cases/{case_id}/tasks/{task_id}/transition",
+        headers=headers(user_id),
+        json={"status": "submitted"},
+    )
+    assert forbidden.status_code == 403
+    assert "As coordinator" in forbidden.json()["detail"]

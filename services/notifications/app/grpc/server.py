@@ -5,6 +5,7 @@ from contracts.generated import notifications_pb2, notifications_pb2_grpc
 from grpc import aio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.kafka import EventPublisher
 from app.models import Notification
 from app.schemas import NotificationCreate
 from app.service import create_notification, mark_read
@@ -16,9 +17,11 @@ class NotificationServicer(notifications_pb2_grpc.NotificationServiceServicer):
         self,
         sessions: async_sessionmaker[AsyncSession],
         manager: ConnectionManager,
+        publisher: EventPublisher,
     ) -> None:
         self.sessions = sessions
         self.manager = manager
+        self.publisher = publisher
 
     async def CreateNotification(self, request, context):  # noqa: N802
         try:
@@ -31,7 +34,9 @@ class NotificationServicer(notifications_pb2_grpc.NotificationServiceServicer):
         except ValueError as exc:
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
         async with self.sessions() as session:
-            notification = await create_notification(session, self.manager, payload)
+            notification = await create_notification(
+                session, self.manager, payload, self.publisher
+            )
         return _response(notification)
 
     async def MarkRead(self, request, context):  # noqa: N802
@@ -58,10 +63,11 @@ def create_server(
     port: int,
     sessions: async_sessionmaker[AsyncSession],
     manager: ConnectionManager,
+    publisher: EventPublisher,
 ) -> aio.Server:
     server = aio.server()
     notifications_pb2_grpc.add_NotificationServiceServicer_to_server(
-        NotificationServicer(sessions, manager), server
+        NotificationServicer(sessions, manager, publisher), server
     )
     server.add_insecure_port(f"[::]:{port}")
     return server

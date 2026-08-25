@@ -9,6 +9,7 @@ service AuthorityService {
   rpc GrantAccess(GrantAccessRequest) returns (GrantResponse);
   rpc RevokeAccess(RevokeAccessRequest) returns (RevokeResponse);
   rpc RegisterCaseOwner(RegisterCaseOwnerRequest) returns (GrantResponse);
+  rpc RegisterCaseCoordinator(RegisterCaseCoordinatorRequest) returns (GrantResponse);
 }
 
 message CheckAccessRequest {
@@ -68,4 +69,11 @@ message RevokeResponse { bool revoked = 1; }
 message RegisterCaseOwnerRequest {
   string user_id = 1;
   string case_id = 2;
+}
+
+message RegisterCaseCoordinatorRequest {
+  string user_id = 1;
+  string case_id = 2;
+  string subject_person_id = 3;
+  string relationship = 4;
 }

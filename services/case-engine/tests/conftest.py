@@ -36,9 +36,30 @@ class FakeAuthority:
         self.access.setdefault(UUID(user_id), {})[UUID(case_id)] = "owner"
         return AccessContext(True, "owner", ["view", "submit", "approve", "manage"])
 
+    async def register_coordinator(
+        self,
+        user_id: str,
+        case_id: str,
+        subject_person_id: str = "",
+        relationship: str = "",
+    ) -> AccessContext:
+        self.access.setdefault(UUID(user_id), {})[UUID(case_id)] = "coordinator"
+        return AccessContext(
+            True,
+            "coordinator",
+            ["view", "submit", "manage"],
+            ["Cannot approve legal declarations"],
+        )
+
     async def check_access(self, user_id: str, case_id: str, action: str) -> AccessContext:
         role = self.access.get(UUID(user_id), {}).get(UUID(case_id), "")
-        permissions = ["view", "submit", "approve", "manage"] if role else []
+        permissions = (
+            ["view", "submit", "approve", "manage"]
+            if role == "owner"
+            else ["view", "submit", "manage"]
+            if role == "coordinator"
+            else []
+        )
         return AccessContext(action in permissions, role, permissions)
 
     async def case_access(self, user_id: str) -> list[tuple[str, str]]:
@@ -97,6 +118,12 @@ class FakeCatalog:
                     }
                 ],
                 "inter_workflow_dependencies": dependencies,
+                "stages": [
+                    {"id": "submitted", "label": "Submitted", "order": 1},
+                    {"id": "under_review", "label": "Under Review", "order": 2},
+                    {"id": "issued", "label": "Issued", "order": 3},
+                ],
+                "typical_duration_days": [max(1, days // 2), days],
             }
             for workflow_id, task_id, title, days, dependencies in values
         ]

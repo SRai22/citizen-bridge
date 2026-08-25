@@ -21,7 +21,7 @@ from app.clients import AuthClient, AuthorityClient
 from app.config import settings
 from app.db.session import engine, session_factory
 from app.grpc import create_server
-from app.kafka import DomainEventConsumer
+from app.kafka import DomainEventConsumer, EventPublisher
 from app.service import generate_weekly_digests, handle_event
 from app.websocket import ConnectionManager
 
@@ -35,12 +35,15 @@ async def check_database() -> None:
         await connection.execute(text("SELECT 1"))
 
 
-async def digest_loop() -> None:
+async def digest_loop(publisher: EventPublisher) -> None:
     while True:
         now = datetime.now(UTC)
         if now.hour >= 9:
             await generate_weekly_digests(
-                session_factory, connections, now.strftime("%A").casefold()
+                session_factory,
+                connections,
+                now.strftime("%A").casefold(),
+                publisher,
             )
         await asyncio.sleep(settings.digest_check_seconds)
 
@@ -49,16 +52,22 @@ async def digest_loop() -> None:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     auth = AuthClient(settings.auth_grpc_host)
     authority = AuthorityClient(settings.authority_grpc_host)
+    publisher = EventPublisher(settings.kafka_bootstrap_servers)
 
     async def consume(event: dict) -> None:
         async with session_factory() as session:
-            await handle_event(session, connections, authority, event)
+            await handle_event(session, connections, authority, event, publisher)
 
-    consumer = DomainEventConsumer(settings.kafka_bootstrap_servers, consume)
-    grpc_server = create_server(settings.grpc_port, session_factory, connections)
+    consumer = DomainEventConsumer(
+        settings.kafka_bootstrap_servers, session_factory, consume
+    )
+    grpc_server = create_server(
+        settings.grpc_port, session_factory, connections, publisher
+    )
+    await publisher.start()
     await grpc_server.start()
     await consumer.start()
-    digests = asyncio.create_task(digest_loop(), name="notification-digests")
+    digests = asyncio.create_task(digest_loop(publisher), name="notification-digests")
     app.state.auth_client = auth
     app.state.authority_client = authority
     app.state.connections = connections
@@ -82,6 +91,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             pass
         await consumer.stop()
         await grpc_server.stop(grace=5)
+        await publisher.stop()
         await authority.close()
         await auth.close()
         await engine.dispose()

@@ -97,3 +97,36 @@ class Delegation(Base):
     valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(20), default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class DelegationApprovalRequest(Base):
+    __tablename__ = "delegation_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'accepted', 'rejected', 'expired')",
+            name="ck_authority_delegation_requests_status",
+        ),
+        {"schema": "authority"},
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    from_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), index=True)
+    to_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), index=True)
+    scope_type: Mapped[str] = mapped_column(String(20))
+    scope_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), index=True)
+    role: Mapped[str] = mapped_column(String(20), default="coordinator")
+    message: Mapped[str | None] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delegation_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class ProcessedEvent(Base):
+    __tablename__ = "processed_events"
+    __table_args__ = ({"schema": "authority"},)
+
+    event_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    consumer_group: Mapped[str] = mapped_column(String(100))

@@ -14,6 +14,10 @@ class Broadcaster(Protocol):
     async def broadcast_to_user(self, user_id: str, message: dict) -> None: ...
 
 
+class Publisher(Protocol):
+    async def publish(self, event: dict) -> None: ...
+
+
 async def preference(session: AsyncSession, user_id: UUID) -> NotificationPreference:
     result = await session.scalar(
         select(NotificationPreference).where(NotificationPreference.user_id == user_id)
@@ -38,12 +42,26 @@ async def update_preference(
 
 
 async def create_notification(
-    session: AsyncSession, broadcaster: Broadcaster, payload: NotificationCreate
+    session: AsyncSession,
+    broadcaster: Broadcaster,
+    payload: NotificationCreate,
+    publisher: Publisher | None = None,
 ) -> Notification:
     notification = Notification(**payload.model_dump())
     session.add(notification)
     await session.commit()
     await session.refresh(notification)
+    if publisher:
+        await publisher.publish(
+            {
+                "event_type": "notification.created",
+                "notification_id": str(notification.id),
+                "user_id": str(notification.user_id),
+                "notification_type": notification.notification_type,
+                "priority": notification.priority,
+                "timestamp": notification.created_at.isoformat(),
+            }
+        )
     settings = await preference(session, payload.user_id)
     category_enabled = settings.categories.get(payload.notification_type, True)
     should_push = settings.push_enabled and category_enabled
@@ -66,6 +84,7 @@ async def handle_event(
     broadcaster: Broadcaster,
     authority: AuthorityClient,
     event: dict,
+    publisher: Publisher | None = None,
 ) -> list[Notification]:
     routed = await route_event(authority, event)
     return [
@@ -73,6 +92,7 @@ async def handle_event(
             session,
             broadcaster,
             NotificationCreate(user_id=UUID(user_id), **draft),
+            publisher,
         )
         for user_id, draft in routed
     ]
@@ -229,6 +249,7 @@ async def generate_weekly_digests(
     sessions: async_sessionmaker[AsyncSession],
     broadcaster: Broadcaster,
     run_day: str | None = None,
+    publisher: Publisher | None = None,
 ) -> None:
     async with sessions() as session:
         user_ids = (
@@ -260,6 +281,7 @@ async def generate_weekly_digests(
                     body="Your weekly Citizen Bridge summary is ready.",
                     data=summary,
                 ),
+                publisher,
             )
 
 

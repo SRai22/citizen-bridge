@@ -11,13 +11,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth_client import AuthClient
 from app.db import get_session
 from app.kafka import EventPublisher
-from app.models import AuthorityGrant, Delegation
+from app.models import AuthorityGrant, Delegation, DelegationApprovalRequest
 from app.schemas import (
     AccessResponse,
     Action,
+    CaseAccessEntry,
     CaseAccessList,
     CaseAccessResponse,
     DelegationRequest,
+    DelegationRequestCreate,
+    DelegationRequestResponse,
     DelegationResponse,
     GrantRequest,
     GrantResponse,
@@ -28,7 +31,10 @@ from app.service import (
     check_access,
     create_delegation,
     create_grant,
+    list_case_access,
     list_user_cases,
+    request_delegation,
+    respond_to_delegation_request,
     revoke_delegation,
     revoke_grant,
 )
@@ -100,6 +106,26 @@ async def cases(user_id: CurrentUserDep, session: SessionDep) -> CaseAccessList:
             for case_id, role, granted_at in rows
         ]
     )
+
+
+@router.get("/cases/{case_id}/access", response_model=list[CaseAccessEntry])
+async def case_access_list(
+    case_id: UUID, user_id: CurrentUserDep, session: SessionDep
+) -> list[CaseAccessEntry]:
+    decision = await check_access(session, user_id, "case", case_id, "view")
+    if not decision.allowed:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "View access required")
+    return [
+        CaseAccessEntry(
+            user_id=member_id,
+            role=role,
+            granted_at=granted_at,
+            granted_by=granted_by,
+        )
+        for member_id, role, granted_at, granted_by in await list_case_access(
+            session, case_id
+        )
+    ]
 
 
 @router.post("/grants", response_model=GrantResponse, status_code=status.HTTP_201_CREATED)
@@ -179,6 +205,82 @@ async def delegate(
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
 
 
+@router.post(
+    "/delegations/request",
+    response_model=DelegationRequestResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_delegation_request(
+    payload: DelegationRequestCreate,
+    from_user_id: CurrentUserDep,
+    session: SessionDep,
+    publisher: PublisherDep,
+    auth: AuthClientDep,
+) -> DelegationApprovalRequest:
+    try:
+        if not await auth.user_exists(str(payload.delegate_to_user_id)):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Delegate not found")
+        return await request_delegation(
+            session,
+            publisher,
+            from_user_id,
+            payload.delegate_to_user_id,
+            payload.scope_id,
+            payload.message,
+            payload.expires_at,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    except ConnectionError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+
+
+@router.get("/delegations/requests", response_model=list[DelegationRequestResponse])
+async def delegation_requests(
+    user_id: CurrentUserDep,
+    session: SessionDep,
+    direction: Literal["sent", "received"] = Query(),
+) -> list[DelegationApprovalRequest]:
+    field = (
+        DelegationApprovalRequest.from_user_id
+        if direction == "sent"
+        else DelegationApprovalRequest.to_user_id
+    )
+    return list(
+        await session.scalars(
+            select(DelegationApprovalRequest).where(field == user_id)
+        )
+    )
+
+
+@router.post(
+    "/delegations/requests/{request_id}/accept",
+    response_model=DelegationRequestResponse,
+)
+async def accept_delegation_request(
+    request_id: UUID,
+    actor_id: CurrentUserDep,
+    session: SessionDep,
+    publisher: PublisherDep,
+) -> DelegationApprovalRequest:
+    return await _respond_to_request(request_id, actor_id, session, publisher, True)
+
+
+@router.post(
+    "/delegations/requests/{request_id}/reject",
+    response_model=DelegationRequestResponse,
+)
+async def reject_delegation_request(
+    request_id: UUID,
+    actor_id: CurrentUserDep,
+    session: SessionDep,
+    publisher: PublisherDep,
+) -> DelegationApprovalRequest:
+    return await _respond_to_request(request_id, actor_id, session, publisher, False)
+
+
 @router.get("/delegations", response_model=list[DelegationResponse])
 async def delegations(
     user_id: CurrentUserDep,
@@ -212,3 +314,23 @@ def _unauthorized(detail: str) -> HTTPException:
         detail,
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+async def _respond_to_request(
+    request_id: UUID,
+    actor_id: UUID,
+    session: AsyncSession,
+    publisher: EventPublisher,
+    accept: bool,
+) -> DelegationApprovalRequest:
+    request = await session.get(DelegationApprovalRequest, request_id)
+    if request is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Delegation request not found")
+    try:
+        return await respond_to_delegation_request(
+            session, publisher, request, actor_id, accept
+        )
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc

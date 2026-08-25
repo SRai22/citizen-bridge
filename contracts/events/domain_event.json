@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://citizen-bridge.local/contracts/events/domain-event-v1.json",
+  "title": "Citizen Bridge domain event envelope",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "event_type",
+    "aggregate_id",
+    "aggregate_type",
+    "occurred_at",
+    "producer_service",
+    "correlation_id",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "event_id": {"type": "string", "format": "uuid"},
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "case.created", "case.activated", "case.completed", "case.abandoned",
+        "task.created", "task.status_changed", "task.completed", "task.failed",
+        "task.blocked", "task.unblocked", "task.stage_advanced",
+        "document.created", "document.verified", "document.accessed",
+        "document.expired", "document.superseded",
+        "user.registered", "user.profile_updated", "user.logged_in", "user.deactivated",
+        "authority.granted", "authority.revoked", "authority.coordinator_assigned",
+        "authority.delegation_created", "authority.delegation_requested",
+        "authority.delegation_accepted", "authority.delegation_rejected",
+        "authority.delegation_expired", "authority.delegation_revoked",
+        "notification.created"
+      ]
+    },
+    "aggregate_id": {"type": "string", "format": "uuid"},
+    "aggregate_type": {"type": "string"},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "producer_service": {"type": "string"},
+    "correlation_id": {"type": "string", "format": "uuid"},
+    "causation_id": {"type": ["string", "null"], "format": "uuid"},
+    "payload": {"type": "object"}
+  },
+  "additionalProperties": false
+}

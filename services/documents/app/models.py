@@ -78,3 +78,12 @@ class DocumentAccessLog(Base):
     task_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
     accessed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     document: Mapped[Document] = relationship(back_populates="accesses")
+
+
+class ProcessedEvent(Base):
+    __tablename__ = "processed_events"
+    __table_args__ = ({"schema": "documents"},)
+
+    event_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    consumer_group: Mapped[str] = mapped_column(String(100))

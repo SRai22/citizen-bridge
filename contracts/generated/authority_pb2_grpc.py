@@ -36,6 +36,11 @@ class AuthorityServiceStub:
             request_serializer=authority__pb2.RegisterCaseOwnerRequest.SerializeToString,
             response_deserializer=authority__pb2.GrantResponse.FromString,
         )
+        self.RegisterCaseCoordinator = channel.unary_unary(
+            service + "RegisterCaseCoordinator",
+            request_serializer=authority__pb2.RegisterCaseCoordinatorRequest.SerializeToString,
+            response_deserializer=authority__pb2.GrantResponse.FromString,
+        )
 
 
 class AuthorityServiceServicer:
@@ -57,6 +62,9 @@ class AuthorityServiceServicer:
     async def RegisterCaseOwner(self, request, context):
         raise NotImplementedError
 
+    async def RegisterCaseCoordinator(self, request, context):
+        raise NotImplementedError
+
 
 def add_AuthorityServiceServicer_to_server(
     servicer: AuthorityServiceServicer, server
@@ -76,6 +84,11 @@ def add_AuthorityServiceServicer_to_server(
             ("GrantAccess", "GrantAccessRequest", "GrantResponse"),
             ("RevokeAccess", "RevokeAccessRequest", "RevokeResponse"),
             ("RegisterCaseOwner", "RegisterCaseOwnerRequest", "GrantResponse"),
+            (
+                "RegisterCaseCoordinator",
+                "RegisterCaseCoordinatorRequest",
+                "GrantResponse",
+            ),
         )
     }
     server.add_generic_rpc_handlers(

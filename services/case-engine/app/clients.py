@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import grpc
 from contracts.generated import (
@@ -23,6 +23,7 @@ class AccessContext:
     allowed: bool
     role: str
     permissions: list[str]
+    limitations: list[str] = field(default_factory=list)
 
 
 class AuthClient:
@@ -63,7 +64,12 @@ class AuthorityClient:
             )
         except grpc.aio.AioRpcError as exc:
             raise ConnectionError("Authority service unavailable") from exc
-        return AccessContext(response.allowed, response.role, list(response.permissions))
+        return AccessContext(
+            response.allowed,
+            response.role,
+            list(response.permissions),
+            list(response.limitations),
+        )
 
     async def case_access(self, user_id: str) -> list[tuple[str, str]]:
         try:
@@ -81,7 +87,35 @@ class AuthorityClient:
             )
         except grpc.aio.AioRpcError as exc:
             raise ConnectionError("Authority service unavailable") from exc
-        return AccessContext(True, response.role, list(response.permissions))
+        return AccessContext(True, response.role, list(response.permissions), [])
+
+    async def register_coordinator(
+        self,
+        user_id: str,
+        case_id: str,
+        subject_person_id: str = "",
+        relationship: str = "",
+    ) -> AccessContext:
+        try:
+            response = await self.stub.RegisterCaseCoordinator(
+                authority_pb2.RegisterCaseCoordinatorRequest(
+                    user_id=user_id,
+                    case_id=case_id,
+                    subject_person_id=subject_person_id,
+                    relationship=relationship,
+                )
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise ConnectionError("Authority service unavailable") from exc
+        return AccessContext(
+            True,
+            response.role,
+            list(response.permissions),
+            [
+                "Cannot approve legal declarations",
+                "Cannot authorize payments or delete the case",
+            ],
+        )
 
     async def check(self) -> None:
         await self.channel.channel_ready()

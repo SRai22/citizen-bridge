@@ -3,8 +3,9 @@
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "0001_documents"
 down_revision: str | None = None
@@ -59,7 +60,12 @@ def upgrade() -> None:
         "source_case_id",
         "source_task_id",
     ):
-        op.create_index(f"ix_documents_documents_{column}", "documents", [column], schema="documents")
+        op.create_index(
+            f"ix_documents_documents_{column}",
+            "documents",
+            [column],
+            schema="documents",
+        )
     op.create_table(
         "document_access_logs",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),

@@ -68,7 +68,8 @@ def test_registration_creates_default_authority_and_kafka_event() -> None:
         if line.startswith("{")
     ]
     assert any(
-        event["event_type"] == "authority.granted" and event["grantee_id"] == user_id
+        event["event_type"] == "authority.granted"
+        and event["payload"]["grantee_id"] == user_id
         for event in events
     )
 
@@ -140,7 +141,7 @@ def test_registration_creates_default_authority_and_kafka_event() -> None:
     )
     assert any(
         event.get("event_type") == "case.created"
-        and event.get("case_id") == created_case["case_id"]
+        and event.get("payload", {}).get("case_id") == created_case["case_id"]
         for event in (
             json.loads(line)
             for line in case_events.stdout.splitlines()

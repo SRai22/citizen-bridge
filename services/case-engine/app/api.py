@@ -5,7 +5,9 @@ from uuid import UUID
 from contracts.lib.observability import reset_user_id, set_user_id
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.clients import AccessContext, AuthClient, AuthorityClient, CatalogClient, UserContext
 from app.db import get_session
@@ -17,10 +19,13 @@ from app.schemas import (
     CaseDetail,
     CaseListResponse,
     CaseStatusFilter,
+    SetSubjectRequest,
     TaskResponse,
+    TaskStageAdvance,
     TaskTransition,
 )
 from app.service import (
+    advance_stage,
     case_detail,
     case_summary,
     create_case,
@@ -84,7 +89,12 @@ async def access(
     except ConnectionError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
     if not decision.allowed:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, f"{action.title()} access required")
+        allowed = ", ".join(decision.permissions) or "no actions"
+        role = decision.role or "current role"
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            f"As {role}, you can: {allowed}. '{action}' requires additional authority.",
+        )
     return decision
 
 
@@ -132,6 +142,71 @@ async def index(
     )
 
 
+@router.get("/context/for-whom")
+async def for_whom(
+    user: UserDep,
+    session: SessionDep,
+    authority: AuthorityDep,
+) -> dict:
+    try:
+        accessible = await authority.case_access(user.user_id)
+    except ConnectionError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+    case_ids = [UUID(case_id) for case_id, _ in accessible]
+    cases = await list_cases(session, case_ids)
+    members = [
+        person
+        for case in cases
+        if case.household_profile
+        for person in case.household_profile.people
+    ]
+    unique = {member.id: member for member in members}
+    return {
+        "options": [
+            {"type": "self", "user_id": user.user_id},
+            {
+                "type": "family",
+                "members": [
+                    {
+                        "person_id": str(member.id),
+                        "name": member.name,
+                        "relationship": member.relationship,
+                    }
+                    for member in unique.values()
+                ],
+            },
+            {"type": "other", "requires": "relationship_description"},
+        ]
+    }
+
+
+@router.post("/context/set-subject", response_model=CaseDetail)
+async def set_subject(
+    payload: SetSubjectRequest,
+    user: UserDep,
+    session: SessionDep,
+    authority: AuthorityDep,
+) -> CaseDetail:
+    await access(authority, user.user_id, payload.case_id, "manage")
+    case = await get_case(session, payload.case_id)
+    if case is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Case not found")
+    members = case.household_profile.people if case.household_profile else []
+    if not any(person.id == payload.subject_person_id for person in members):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Subject is not in this case")
+    case.subject_person_id = payload.subject_person_id
+    case.coordinator_user_id = UUID(user.user_id)
+    case.subject_relationship = payload.relationship
+    await session.commit()
+    decision = await authority.register_coordinator(
+        user.user_id,
+        str(case.id),
+        str(payload.subject_person_id),
+        payload.relationship,
+    )
+    return case_detail(case, decision)
+
+
 @router.get("/{case_id}", response_model=CaseDetail)
 async def detail(
     case_id: UUID, user: UserDep, session: SessionDep, authority: AuthorityDep
@@ -174,13 +249,47 @@ async def transition(
     events: PublisherDep,
 ) -> TaskResponse:
     decision = await access(authority, user.user_id, case_id, "submit")
-    task = await session.get(Task, task_id)
+    task = await session.scalar(
+        select(Task).where(Task.id == task_id).options(selectinload(Task.wait_state))
+    )
     if task is None or task.case_id != case_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found")
+    if task.status.value == "awaiting_approval" and payload.status.value == "submitted":
+        decision = await access(authority, user.user_id, case_id, "approve")
     try:
         await transition_task(
             session, events, task, payload.status, UUID(user.user_id), payload.output_data
         )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    case = await get_case(session, case_id)
+    assert case is not None
+    groups = case_detail(case, decision).tasks_by_group
+    return next(
+        item
+        for item in groups.ready + groups.waiting + groups.blocked + groups.completed
+        if item.task_id == task_id
+    )
+
+
+@router.post("/{case_id}/tasks/{task_id}/stage", response_model=TaskResponse)
+async def stage(
+    case_id: UUID,
+    task_id: UUID,
+    payload: TaskStageAdvance,
+    user: UserDep,
+    session: SessionDep,
+    authority: AuthorityDep,
+    events: PublisherDep,
+) -> TaskResponse:
+    decision = await access(authority, user.user_id, case_id, "submit")
+    task = await session.scalar(
+        select(Task).where(Task.id == task_id).options(selectinload(Task.wait_state))
+    )
+    if task is None or task.case_id != case_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found")
+    try:
+        await advance_stage(session, events, task, payload.stage, UUID(user.user_id))
     except ValueError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     case = await get_case(session, case_id)
