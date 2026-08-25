@@ -258,21 +258,44 @@ services:
 
   documents:
     <<: *service-defaults
+    build:
+      context: .
+      dockerfile: services/documents/Dockerfile
+    image: citizen-bridge-documents:local
+    profiles: []
+    depends_on:
+      <<: *service-depends-on
+      auth:
+        condition: service_healthy
     environment:
       <<: *service-environment
       SERVICE_NAME: documents
       HTTP_PORT: 8004
       GRPC_PORT: 50054
+      AUTH_GRPC_HOST: auth:50051
       DATABASE_URL: postgresql+asyncpg://document_service:${DOCUMENT_DB_PASSWORD}@postgres:5432/citizen_bridge
     expose: ["8004", "50054"]
 
   notifications:
     <<: *service-defaults
+    build:
+      context: .
+      dockerfile: services/notifications/Dockerfile
+    image: citizen-bridge-notifications:local
+    profiles: []
+    depends_on:
+      <<: *service-depends-on
+      auth:
+        condition: service_healthy
+      authority:
+        condition: service_healthy
     environment:
       <<: *service-environment
       SERVICE_NAME: notifications
       HTTP_PORT: 8005
       GRPC_PORT: 50055
+      AUTH_GRPC_HOST: auth:50051
+      AUTHORITY_GRPC_HOST: authority:50052
       DATABASE_URL: postgresql+asyncpg://notification_service:${NOTIFICATION_DB_PASSWORD}@postgres:5432/citizen_bridge
       ENABLE_WEBSOCKET: "true"
     expose: ["8005", "50055"]

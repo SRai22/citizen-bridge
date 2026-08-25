@@ -224,6 +224,10 @@ async def transition_task(
             old_status=previous.value,
             new_status=status.value,
             changed_by=str(user_id),
+            owner_user_id=str(user_id),
+            task_type=task.task_type,
+            title=task.title,
+            output_data=output_data,
         ),
     )
     return task

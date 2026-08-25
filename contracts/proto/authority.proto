@@ -5,6 +5,7 @@ package citizen_bridge.authority.v1;
 service AuthorityService {
   rpc CheckAccess(CheckAccessRequest) returns (CheckAccessResponse);
   rpc GetUserCases(GetUserCasesRequest) returns (CaseAccessList);
+  rpc GetCaseUsers(GetCaseUsersRequest) returns (CaseUserList);
   rpc GrantAccess(GrantAccessRequest) returns (GrantResponse);
   rpc RevokeAccess(RevokeAccessRequest) returns (RevokeResponse);
   rpc RegisterCaseOwner(RegisterCaseOwnerRequest) returns (GrantResponse);
@@ -33,6 +34,10 @@ message CaseAccess {
 }
 
 message CaseAccessList { repeated CaseAccess cases = 1; }
+
+message GetCaseUsersRequest { string case_id = 1; }
+
+message CaseUserList { repeated string user_ids = 1; }
 
 message GrantAccessRequest {
   string actor_user_id = 1;

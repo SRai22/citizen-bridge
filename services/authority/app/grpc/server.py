@@ -11,6 +11,7 @@ from app.models import AuthorityGrant
 from app.service import (
     check_access,
     create_grant,
+    list_case_users,
     list_user_cases,
     permissions_for,
     revoke_grant,
@@ -66,6 +67,15 @@ class AuthorityServicer(authority_pb2_grpc.AuthorityServiceServicer):
                 for case_id, role, _ in cases
             ]
         )
+
+    async def GetCaseUsers(self, request, context):  # noqa: N802
+        try:
+            case_id = UUID(request.case_id)
+        except ValueError:
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Invalid case ID")
+        async with self.sessions() as session:
+            user_ids = await list_case_users(session, case_id)
+        return authority_pb2.CaseUserList(user_ids=[str(user_id) for user_id in user_ids])
 
     async def GrantAccess(self, request, context):  # noqa: N802
         try:

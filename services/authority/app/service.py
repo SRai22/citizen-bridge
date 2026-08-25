@@ -142,6 +142,43 @@ async def list_user_cases(session: AsyncSession, user_id: UUID) -> list[tuple[UU
     ]
 
 
+async def list_case_users(session: AsyncSession, case_id: UUID) -> list[UUID]:
+    now = datetime.now(UTC)
+    direct = set(
+        (
+            await session.scalars(
+                select(CaseAccess.user_id)
+                .join(AuthorityGrant, CaseAccess.grant_id == AuthorityGrant.id)
+                .where(
+                    CaseAccess.case_id == case_id,
+                    AuthorityGrant.revoked_at.is_(None),
+                    or_(AuthorityGrant.expires_at.is_(None), AuthorityGrant.expires_at > now),
+                )
+            )
+        ).all()
+    )
+    delegations = (
+        await session.scalars(
+            select(Delegation).where(
+                Delegation.status == "active",
+                Delegation.valid_from <= now,
+                or_(Delegation.valid_until.is_(None), Delegation.valid_until > now),
+                or_(
+                    Delegation.scope_type == "all_cases",
+                    (Delegation.scope_type == "case") & (Delegation.scope_id == case_id),
+                ),
+            )
+        )
+    ).all()
+    for delegation in delegations:
+        delegator = await _direct_access(
+            session, delegation.delegator_id, "case", case_id, "view", now
+        )
+        if delegator.allowed:
+            direct.add(delegation.delegate_id)
+    return sorted(direct, key=str)
+
+
 async def _direct_access(
     session: AsyncSession,
     user_id: UUID,
@@ -272,6 +309,9 @@ async def revoke_grant(
         _event(
             "authority.revoked",
             grant_id=str(grant.id),
+            grantee_id=str(grant.grantee_id),
+            resource_type=grant.resource_type,
+            resource_id=str(grant.resource_id),
             revocation_reason=reason,
         )
     )
@@ -374,6 +414,9 @@ async def expire_authority(
                 _event(
                     "authority.revoked",
                     grant_id=str(grant.id),
+                    grantee_id=str(grant.grantee_id),
+                    resource_type=grant.resource_type,
+                    resource_id=str(grant.resource_id),
                     revocation_reason="expired",
                 )
             )

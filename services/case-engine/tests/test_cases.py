@@ -70,6 +70,22 @@ async def test_authenticated_case_flow(case_context) -> None:
     assert [event[1]["event_type"] for event in events.events].count("task.created") == 4
     assert events.events[-1][1]["event_type"] == "task.status_changed"
 
+    completed = await client.post(
+        f"/api/cases/{case_id}/tasks/{task_id}/transition",
+        headers=headers(user_id),
+        json={
+            "status": "completed",
+            "output_data": {"produced_documents": ["death_certificate"]},
+        },
+    )
+    assert completed.status_code == 200
+    topic, event = events.events[-1]
+    assert topic == "tasks"
+    assert event["event_type"] == "task.completed"
+    assert event["owner_user_id"] == str(user_id)
+    assert event["task_type"]
+    assert event["output_data"] == {"produced_documents": ["death_certificate"]}
+
 
 @pytest.mark.asyncio
 async def test_rejects_inconsistent_workflow_profile(case_context) -> None:

@@ -4,24 +4,73 @@ package citizen_bridge.documents.v1;
 
 service DocumentService {
   rpc CheckRequirements(CheckRequirementsRequest) returns (CheckRequirementsResponse);
+  rpc CreateDocument(CreateDocumentRequest) returns (DocumentResponse);
   rpc GetDocument(GetDocumentRequest) returns (DocumentResponse);
+  rpc RecordAccess(RecordAccessRequest) returns (Empty);
+  rpc GetUserDocuments(GetUserDocumentsRequest) returns (DocumentList);
+}
+
+message Requirement {
+  string document_type = 1;
+  string subject_person_id = 2;
+}
+
+message RequirementResult {
+  string document_type = 1;
+  string status = 2;
+  string document_id = 3;
 }
 
 message CheckRequirementsRequest {
   string user_id = 1;
   repeated string document_types = 2;
+  repeated Requirement requirements = 3;
 }
 
 message CheckRequirementsResponse {
   repeated string available_types = 1;
   repeated string missing_types = 2;
+  repeated RequirementResult requirements = 3;
+}
+
+message CreateDocumentRequest {
+  string owner_user_id = 1;
+  string document_type = 2;
+  string proof_category = 3;
+  string title = 4;
+  string issuer = 5;
+  string provenance_type = 6;
+  string provenance_source = 7;
+  string source_case_id = 8;
+  string source_task_id = 9;
+  string data_json = 10;
 }
 
 message GetDocumentRequest { string document_id = 1; }
+
+message RecordAccessRequest {
+  string document_id = 1;
+  string accessed_by_user_id = 2;
+  string accessed_by_service = 3;
+  string action = 4;
+  string purpose = 5;
+  string recipient = 6;
+  string case_id = 7;
+  string task_id = 8;
+}
+
+message GetUserDocumentsRequest { string user_id = 1; }
 
 message DocumentResponse {
   string document_id = 1;
   string owner_user_id = 2;
   string document_type = 3;
   string verification_status = 4;
+  string proof_category = 5;
+  string title = 6;
+  string document_json = 7;
 }
+
+message DocumentList { repeated DocumentResponse documents = 1; }
+
+message Empty {}

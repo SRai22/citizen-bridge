@@ -11,6 +11,7 @@ from app.service import (
     create_delegation,
     create_grant,
     expire_authority,
+    list_case_users,
     list_user_cases,
     revoke_delegation,
     revoke_grant,
@@ -172,6 +173,30 @@ async def test_grpc_registers_case_owner(authority_context) -> None:
 
     assert registered.role == "owner"
     assert checked.allowed is True
+
+
+@pytest.mark.asyncio
+async def test_case_users_include_direct_and_delegated_access(authority_context) -> None:
+    _, sessions, publisher, _ = authority_context
+    owner_id, coordinator_id, delegate_id, case_id = uuid4(), uuid4(), uuid4(), uuid4()
+    async with sessions() as session:
+        await create_grant(session, publisher, None, owner_id, "case", case_id, "owner")
+        await create_grant(
+            session, publisher, owner_id, coordinator_id, "case", case_id, "coordinator"
+        )
+        await create_delegation(
+            session, publisher, owner_id, delegate_id, "case", case_id, "viewer", [], None
+        )
+        assert set(await list_case_users(session, case_id)) == {
+            owner_id,
+            coordinator_id,
+            delegate_id,
+        }
+
+    response = await AuthorityServicer(sessions, publisher).GetCaseUsers(
+        authority_pb2.GetCaseUsersRequest(case_id=str(case_id)), AbortContext()
+    )
+    assert set(response.user_ids) == {str(owner_id), str(coordinator_id), str(delegate_id)}
 
 
 @pytest.mark.asyncio

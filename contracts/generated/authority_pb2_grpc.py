@@ -16,6 +16,11 @@ class AuthorityServiceStub:
             request_serializer=authority__pb2.GetUserCasesRequest.SerializeToString,
             response_deserializer=authority__pb2.CaseAccessList.FromString,
         )
+        self.GetCaseUsers = channel.unary_unary(
+            service + "GetCaseUsers",
+            request_serializer=authority__pb2.GetCaseUsersRequest.SerializeToString,
+            response_deserializer=authority__pb2.CaseUserList.FromString,
+        )
         self.GrantAccess = channel.unary_unary(
             service + "GrantAccess",
             request_serializer=authority__pb2.GrantAccessRequest.SerializeToString,
@@ -38,6 +43,9 @@ class AuthorityServiceServicer:
         raise NotImplementedError
 
     async def GetUserCases(self, request, context):
+        raise NotImplementedError
+
+    async def GetCaseUsers(self, request, context):
         raise NotImplementedError
 
     async def GrantAccess(self, request, context):
@@ -64,6 +72,7 @@ def add_AuthorityServiceServicer_to_server(
         for name, request_type, response_type in (
             ("CheckAccess", "CheckAccessRequest", "CheckAccessResponse"),
             ("GetUserCases", "GetUserCasesRequest", "CaseAccessList"),
+            ("GetCaseUsers", "GetCaseUsersRequest", "CaseUserList"),
             ("GrantAccess", "GrantAccessRequest", "GrantResponse"),
             ("RevokeAccess", "RevokeAccessRequest", "RevokeResponse"),
             ("RegisterCaseOwner", "RegisterCaseOwnerRequest", "GrantResponse"),
