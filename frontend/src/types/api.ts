@@ -35,7 +35,7 @@ export interface IntakeHouseholdProfile {
 }
 
 export interface IntakeResponse {
-  session_id: string;
+  conversation_id: string;
   status: "in_progress" | "complete";
   message: string;
   profile: IntakeHouseholdProfile | null;
@@ -57,7 +57,19 @@ export interface AuthSession {
 export interface LifeEventCategory {
   id: string;
   title: string;
+  subtitle: string;
+  icon: string;
   description: string;
+  service_count: number;
+}
+
+export interface CatalogService {
+  id: string;
+  name: string;
+  authority: string;
+  category: string;
+  typical_wait_days: [number, number];
+  stages_known: boolean;
 }
 
 export interface CaseTask {
@@ -71,6 +83,18 @@ export interface CaseTask {
   completed_at: string | null;
   blocked_reason: string | null;
   blocked_by_task_ids: string[];
+  wait_state?: {
+    stages_known: boolean;
+    stages: Array<{ id: string; label: string; description: string; order: number }>;
+    current_stage: string | null;
+    status_label: string | null;
+    submitted_at: string | null;
+    estimated_wait: { min_days: number | null; max_days: number | null };
+    last_update: string | null;
+    is_overdue: boolean;
+    message: string | null;
+  } | null;
+  wait_summary?: string | null;
 }
 
 export interface CaseOverview {

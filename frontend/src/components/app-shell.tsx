@@ -19,7 +19,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
-  if (pathname.startsWith("/onboarding")) return children;
+  if (pathname.startsWith("/onboarding") || pathname.endsWith("/review")) return children;
 
   return (
     <div className="min-h-screen bg-slate-50 md:flex">

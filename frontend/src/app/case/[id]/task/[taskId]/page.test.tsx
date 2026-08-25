@@ -11,15 +11,20 @@ import type {
 
 import TaskDetailPage from "./page";
 
-const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+const { push, replace, router } = vi.hoisted(() => {
+  const stablePush = vi.fn();
+  const stableReplace = vi.fn();
+  return { push: stablePush, replace: stableReplace, router: { push: stablePush, replace: stableReplace } };
+});
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "case-12345678", taskId: "task-pension" }),
-  useRouter: () => ({ push }),
+  useRouter: () => router,
 }));
 
 afterEach(() => {
   push.mockReset();
+  replace.mockReset();
   vi.restoreAllMocks();
 });
 
@@ -28,7 +33,7 @@ const approval: ApprovalRequest = {
   created_at: "2026-08-15T12:00:00Z",
   updated_at: "2026-08-15T12:00:00Z",
   task_id: "task-pension",
-  action_description: "Submit death registration",
+  action_description: "Submit death registration to BBMP",
   status: "pending",
   context: {
     summary: "Review and submit the death registration to BBMP.",
@@ -105,14 +110,14 @@ test("fetches and renders full task details", async () => {
   expect(screen.getByText("Obtain Death Certificate")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Back to case" })).toHaveAttribute(
     "href",
-    "/case/case-12345678",
+    "/life-events/case-12345678",
   );
   expect(fetchMock).toHaveBeenCalledTimes(3);
 });
 
-test("prepares, confirms, and refreshes a completed submission", async () => {
+test("prepares a submission and navigates to the full-page review", async () => {
   let currentTask = readyDeathTask;
-  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
     const method = init?.method ?? "GET";
     if (url.endsWith("/requirements")) return Response.json([]);
@@ -120,32 +125,6 @@ test("prepares, confirms, and refreshes a completed submission", async () => {
     if (url.endsWith("/prepare")) {
       currentTask = { ...currentTask, status: "awaiting_approval", approval_requests: [approval] };
       return Response.json(approval);
-    }
-    if (url.endsWith("/approve")) {
-      currentTask = {
-        ...currentTask,
-        status: "completed",
-        completed_at: "2026-08-15T12:00:01Z",
-        approval_requests: [{ ...approval, status: "approved" }],
-        external_applications: [approvedApplication],
-        produced_documents: [
-          {
-            id: "document-1",
-            created_at: "2026-08-15T12:00:01Z",
-            updated_at: "2026-08-15T12:00:01Z",
-            case_id: citizenCase.id,
-            produced_by_task_id: currentTask.id,
-            document_type: "death_certificate",
-            owner_name: "Arun Rao",
-            issuer: "BBMP",
-            issued_at: "2026-08-15T12:00:01Z",
-            verification_status: "verified",
-            extracted_fields: {},
-            metadata: {},
-          },
-        ],
-      };
-      return Response.json(approvedApplication);
     }
     if (url.endsWith("/tasks/task-pension")) return Response.json(currentTask);
     return Response.json({ ...citizenCase, tasks: [currentTask] });
@@ -168,62 +147,9 @@ test("prepares, confirms, and refreshes a completed submission", async () => {
   });
   fireEvent.click(screen.getByRole("button", { name: "Prepare submission" }));
 
-  const dialog = await screen.findByRole("dialog", { name: "Confirm this submission" });
-  expect(dialog).toHaveTextContent("Review and submit the death registration to BBMP.");
-  expect(dialog).toHaveTextContent("Arun Rao");
-  expect(dialog).toHaveTextContent("Bengaluru");
-
-  fireEvent.click(screen.getByRole("button", { name: "Approve & submit" }));
-
-  expect(await screen.findByText("Task completed")).toBeInTheDocument();
-  const documentsSection = screen.getByRole("heading", { name: "Documents" }).parentElement;
-  expect(documentsSection).not.toBeNull();
-  expect(within(documentsSection!).getByText("Death Certificate")).toBeInTheDocument();
-  expect(screen.getByText("Submission approved and completed successfully.")).toBeInTheDocument();
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  expect(
-    fetchMock.mock.calls.some(
-      ([input, init]) => String(input).endsWith("/approve") && init?.method === "POST",
-    ),
-  ).toBe(true);
-});
-
-test("cancel rejects the approval and returns the task to ready", async () => {
-  let currentTask = readyDeathTask;
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
-    const url = String(input);
-    const method = init?.method ?? "GET";
-    if (url.endsWith("/requirements")) return Response.json([]);
-    if (method === "PATCH") return Response.json(currentTask);
-    if (url.endsWith("/prepare")) {
-      currentTask = { ...currentTask, status: "awaiting_approval", approval_requests: [approval] };
-      return Response.json(approval);
-    }
-    if (url.endsWith("/reject")) {
-      currentTask = { ...currentTask, status: "ready", approval_requests: [] };
-      return Response.json({ ...approval, status: "rejected" });
-    }
-    if (url.endsWith("/tasks/task-pension")) return Response.json(currentTask);
-    return Response.json({ ...citizenCase, tasks: [currentTask] });
-  });
-
-  render(<TaskDetailPage />);
-  await screen.findByRole("heading", { name: readyDeathTask.title });
-  for (const [label, value] of [
-    ["Full name of deceased", "Arun Rao"],
-    ["Date of death", "2026-08-10"],
-    ["Place of death", "Bengaluru"],
-    ["Cause of death", "Natural causes"],
-  ]) {
-    fireEvent.change(screen.getByLabelText(label), { target: { value } });
-  }
-  fireEvent.click(screen.getByRole("button", { name: "Prepare submission" }));
-  await screen.findByRole("dialog");
-  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-
-  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-  expect(screen.getByText(/Submission cancelled/)).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Prepare submission" })).toBeEnabled();
+  await waitFor(() => expect(push).toHaveBeenCalledWith(
+    "/life-events/case-12345678/task/task-pension/review?approval=approval-1",
+  ));
 });
 
 test("explains a rejection and accepts the proposed remediation", async () => {
@@ -363,7 +289,7 @@ test("shows remediation documents as missing and names their producer task", asy
   expect(screen.getByText("Not yet obtained")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Obtain Legal Heir Certificate" })).toHaveAttribute(
     "href",
-    "/case/case-12345678/task/task-legal-heir",
+    "/life-events/case-12345678/task/task-legal-heir",
   );
 
   unmount();

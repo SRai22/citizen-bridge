@@ -146,6 +146,12 @@ class Task(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     wait_state: Mapped[TaskWaitState | None] = orm_relationship(
         back_populates="task", cascade="all, delete-orphan", passive_deletes=True
     )
+    external_applications: Mapped[list[ExternalApplication]] = orm_relationship(
+        back_populates="task", cascade="all, delete-orphan", passive_deletes=True
+    )
+    approval_requests: Mapped[list[ApprovalRequest]] = orm_relationship(
+        back_populates="task", cascade="all, delete-orphan", passive_deletes=True
+    )
 
 
 class TaskWaitState(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -198,6 +204,7 @@ class ExternalApplication(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(50), default="prepared")
     request_payload: Mapped[dict[str, Any]] = json_column()
     response_payload: Mapped[dict[str, Any]] = json_column()
+    task: Mapped[Task] = orm_relationship(back_populates="external_applications")
 
 
 class ApprovalRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -210,6 +217,7 @@ class ApprovalRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     action_description: Mapped[str] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(50), default="pending")
     context: Mapped[dict[str, Any]] = json_column()
+    task: Mapped[Task] = orm_relationship(back_populates="approval_requests")
 
 
 class AuditEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):

@@ -53,21 +53,27 @@ services:
       - ./contracts:/app/contracts
 
   documents:
-    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8004
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --reload --host 0.0.0.0 --port 8004"
     ports: ["8004:8004", "50054:50054"]
-    volumes: &service-volumes
-      - ./services/service-template/app:/app/services/service-template/app
+    volumes:
+      - ./services/documents/app:/app/services/documents/app
+      - ./services/documents/alembic:/app/services/documents/alembic
       - ./contracts:/app/contracts
 
   notifications:
-    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8005
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --reload --host 0.0.0.0 --port 8005"
     ports: ["8005:8005", "50055:50055"]
-    volumes: *service-volumes
+    volumes:
+      - ./services/notifications/app:/app/services/notifications/app
+      - ./services/notifications/alembic:/app/services/notifications/alembic
+      - ./contracts:/app/contracts
 
   catalog:
     command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8006
     ports: ["8006:8006", "50056:50056"]
-    volumes: *service-volumes
+    volumes:
+      - ./services/catalog/app:/app/services/catalog/app
+      - ./contracts:/app/contracts
 
   ai:
     command: sh -c "alembic upgrade head && uvicorn app.main:app --reload --host 0.0.0.0 --port 8007"

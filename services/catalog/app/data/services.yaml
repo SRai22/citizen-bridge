@@ -1,0 +1,227 @@
+known_stages: &known_stages
+  - id: submitted
+    label: Submitted
+    description: Application received by the authority.
+    order: 1
+  - id: under_review
+    label: Under Review
+    description: Application is being checked by the responsible office.
+    order: 2
+  - id: approved
+    label: Approved
+    description: Application approved and the result is being prepared.
+    order: 3
+  - id: issued
+    label: Issued
+    description: Result is ready for collection or download.
+    order: 4
+
+services:
+  - id: death_certificate
+    name: Death Certificate
+    authority: BBMP / Municipal Corporation
+    category: certificates
+    description: Register a death and obtain the official certificate.
+    typical_wait_days: [3, 7]
+    stages_known: true
+    stages: *known_stages
+    required_profile_fields: [name, dob, city]
+    workflow_id: death_certificate
+
+  - id: family_pension_transfer
+    name: Family Pension Transfer
+    authority: Karnataka Treasury Department
+    category: benefits
+    description: Transfer a deceased pensioner's family pension to an eligible survivor.
+    typical_wait_days: [15, 30]
+    stages_known: false
+    stages: []
+    required_profile_fields: [name, dob, city, income]
+    workflow_id: family_pension
+
+  - id: electricity_name_transfer
+    name: Electricity Name Transfer
+    authority: BESCOM
+    category: utilities
+    description: Transfer an electricity connection from a deceased account holder.
+    typical_wait_days: [7, 15]
+    stages_known: true
+    stages: *known_stages
+    required_profile_fields: [name, city]
+    workflow_id: bescom_transfer
+
+  - id: ration_card_update
+    name: Ration Card Household Update
+    authority: Karnataka Food and Civil Supplies Department
+    category: benefits
+    description: Remove a deceased member and nominate a new household head.
+    typical_wait_days: [15, 30]
+    stages_known: false
+    stages: []
+    required_profile_fields: [name, city]
+    workflow_id: ration_card
+
+  - id: legal_heir_certificate
+    name: Legal Heir Certificate
+    authority: Karnataka Revenue Department
+    category: certificates
+    description: Obtain an official certificate identifying the lawful heirs.
+    typical_wait_days: [7, 14]
+    stages_known: true
+    stages: *known_stages
+    required_profile_fields: [name, city]
+    workflow_id: legal_heir_certificate
+
+  - id: birth_certificate
+    name: Birth Certificate
+    authority: Municipal Registrar of Births and Deaths
+    category: certificates
+    description: Register a child's birth and obtain the official certificate.
+    typical_wait_days: [3, 7]
+    stages_known: true
+    stages: *known_stages
+    required_profile_fields: [name, city]
+    workflow_id: birth_certificate
+
+  - id: aadhaar_enrollment
+    name: Child Aadhaar Enrollment
+    authority: UIDAI
+    category: identity
+    description: Enroll a child for an Aadhaar identity number.
+    typical_wait_days: [15, 30]
+    stages_known: true
+    stages: *known_stages
+    required_profile_fields: [name, dob, city]
+    workflow_id: aadhaar_enrollment
+
+  - id: vaccination_registration
+    name: Vaccination Registration
+    authority: Karnataka Health Department
+    category: health
+    description: Register a child for the public vaccination schedule.
+    typical_wait_days: [1, 3]
+    stages_known: false
+    stages: []
+    required_profile_fields: [name, dob, city]
+    workflow_id: vaccination_registration
+
+  - id: electricity_transfer
+    name: Electricity Connection Transfer
+    authority: BESCOM
+    category: utilities
+    description: Move an electricity connection to a new address.
+    typical_wait_days: [7, 15]
+    stages_known: true
+    stages: *known_stages
+    required_profile_fields: [name, city]
+    workflow_id: electricity_transfer
+
+  - id: water_transfer
+    name: Water Connection Transfer
+    authority: BWSSB
+    category: utilities
+    description: Move or update a municipal water connection.
+    typical_wait_days: [7, 21]
+    stages_known: true
+    stages: *known_stages
+    required_profile_fields: [name, city]
+    workflow_id: water_transfer
+
+  - id: ration_card_address_update
+    name: Ration Card Address Update
+    authority: Karnataka Food and Civil Supplies Department
+    category: benefits
+    description: Update the household address on a ration card.
+    typical_wait_days: [7, 30]
+    stages_known: false
+    stages: []
+    required_profile_fields: [name, city]
+    workflow_id: ration_card_address_update
+
+  - id: voter_id_update
+    name: Voter ID Address Update
+    authority: Election Commission of India
+    category: identity
+    description: Update the registered address on a voter identity record.
+    typical_wait_days: [14, 30]
+    stages_known: true
+    stages: *known_stages
+    required_profile_fields: [name, dob, city]
+    workflow_id: voter_id_update
+
+  - id: provident_fund_claim
+    name: Provident Fund Claim
+    authority: Employees' Provident Fund Organisation
+    category: benefits
+    description: Claim or transfer an eligible provident fund balance.
+    typical_wait_days: [7, 20]
+    stages_known: true
+    stages: *known_stages
+    required_profile_fields: [name, dob, city]
+    workflow_id: provident_fund_claim
+
+  - id: pension_application
+    name: Retirement Pension Application
+    authority: Pension Sanctioning Authority
+    category: benefits
+    description: Apply for an eligible retirement pension.
+    typical_wait_days: [30, 60]
+    stages_known: false
+    stages: []
+    required_profile_fields: [name, dob, city, income]
+    workflow_id: pension_application
+
+  - id: unemployment_support
+    name: Unemployment Support
+    authority: Karnataka Labour Department
+    category: benefits
+    description: Check and apply for available employment and income support.
+    typical_wait_days: [7, 30]
+    stages_known: false
+    stages: []
+    required_profile_fields: [name, dob, city, income]
+    workflow_id: unemployment_support
+
+  - id: marriage_certificate
+    name: Marriage Certificate
+    authority: Department of Stamps and Registration
+    category: certificates
+    description: Register a marriage and obtain the official certificate.
+    typical_wait_days: [7, 30]
+    stages_known: true
+    stages: *known_stages
+    required_profile_fields: [name, city]
+    workflow_id: marriage_certificate
+
+  - id: property_mutation
+    name: Property Mutation
+    authority: Karnataka Revenue Department
+    category: property
+    description: Update land records after an ownership change.
+    typical_wait_days: [15, 45]
+    stages_known: true
+    stages: *known_stages
+    required_profile_fields: [name, city]
+    workflow_id: property_mutation
+
+  - id: scholarship_application
+    name: Scholarship Application
+    authority: Karnataka Education Department
+    category: benefits
+    description: Apply for eligible education scholarships.
+    typical_wait_days: [15, 45]
+    stages_known: false
+    stages: []
+    required_profile_fields: [name, dob, city, income]
+    workflow_id: scholarship_application
+
+  - id: senior_pension
+    name: Senior Citizen Pension
+    authority: Karnataka Social Welfare Department
+    category: benefits
+    description: Apply for eligible senior citizen pension support.
+    typical_wait_days: [30, 60]
+    stages_known: false
+    stages: []
+    required_profile_fields: [name, dob, city, income]
+    workflow_id: senior_pension

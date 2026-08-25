@@ -8,7 +8,7 @@ interface RouteContext {
 
 export async function GET(request: NextRequest, context: RouteContext) {
   const { path } = await context.params;
-  const backendPath = path.map(encodeURIComponent).join("/");
+  const backendPath = taskDetailPath(path);
   return proxyBackendRequest(request, `/api/cases/${backendPath}`);
 }
 
@@ -20,6 +20,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const { path } = await context.params;
-  const backendPath = path.map(encodeURIComponent).join("/");
+  const backendPath = taskDetailPath(path);
   return proxyBackendRequest(request, `/api/cases/${backendPath}`);
+}
+
+function taskDetailPath(path: string[]) {
+  const encoded = path.map(encodeURIComponent).join("/");
+  return path.length === 3 && path[1] === "tasks" ? `${encoded}/detail` : encoded;
 }

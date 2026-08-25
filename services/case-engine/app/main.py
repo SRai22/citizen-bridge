@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from starlette.responses import JSONResponse, Response
 
-from app.api import router
+from app.api import approvals_router, router
 from app.clients import AIClient, AuthClient, AuthorityClient, CatalogClient
 from app.config import settings
 from app.db.session import engine, session_factory
@@ -92,6 +92,7 @@ app = FastAPI(
 )
 app.state.health_checks = {"database": check_database}
 app.include_router(router)
+app.include_router(approvals_router)
 app.middleware("http")(http_metrics_middleware)
 app.middleware("http")(correlation_middleware)
 setup_tracing(

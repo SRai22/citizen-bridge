@@ -42,9 +42,11 @@ def test_walking_skeleton_repeats_three_times_under_thirty_seconds() -> None:
         assert status == 200
         assert catalog["categories"][0]["title"] == "Someone Passed Away"
 
-        status, intake = request_json(client, "POST", "/api/intake/start")
-        assert status == 200
-        session_id = intake["session_id"]
+        status, intake = request_json(
+            client, "POST", "/api/intake/start", {"category_id": "address_change"}
+        )
+        assert status == 201
+        session_id = intake["conversation_id"]
         for answer in (
             "My father passed away",
             "His name was Rajesh Kumar",
@@ -60,7 +62,54 @@ def test_walking_skeleton_repeats_three_times_under_thirty_seconds() -> None:
             assert status == 200
         assert intake["status"] == "complete"
 
-        status, created = request_json(client, "POST", f"/api/intake/{session_id}/confirm")
+        status, confirmed = request_json(
+            client,
+            "POST",
+            f"/api/intake/{session_id}/confirm",
+            {"profile_confirmed": True},
+        )
+        assert status == 200
+        profile = confirmed["profile"]
+        status, created = request_json(
+            client,
+            "POST",
+            "/api/cases",
+            {
+                "life_event": {
+                    "type": "address_change",
+                    "context": {"category_id": "address_change"},
+                },
+                "household_profile": {
+                    "location_city": profile["location"]["city"],
+                    "location_state": profile["location"]["state"],
+                        "people": [
+                            {
+                                "name": profile["deceased"]["name"],
+                                "relationship": profile["deceased"]["relationship"],
+                                "role": None,
+                                "is_deceased": False,
+                                "attributes": {
+                                    "occupation": profile["deceased"]["occupation"],
+                                    "pension_status": profile["deceased"]["pension_status"],
+                                },
+                            },
+                            *[
+                                {
+                                    "name": person["name"],
+                                    "relationship": person["relationship"],
+                                    "role": None,
+                                    "is_deceased": False,
+                                    "attributes": {
+                                        "occupation": person["occupation"],
+                                        "pension_status": person["pension_status"],
+                                    },
+                                }
+                            for person in profile["surviving_members"]
+                        ],
+                    ],
+                },
+            },
+        )
         assert status == 201
         status, case = request_json(client, "GET", f"/api/cases/{created['case_id']}")
         assert status == 200
@@ -68,6 +117,34 @@ def test_walking_skeleton_repeats_three_times_under_thirty_seconds() -> None:
         assert case["progress"] == {"completed": 0, "total": 4}
         assert sum(len(tasks) for tasks in case["tasks_by_group"].values()) == 4
         assert client.open(f"{FRONTEND_URL}/case/{created['case_id']}", timeout=10).status == 200
+
+        task_id = case["tasks_by_group"]["ready"][0]["task_id"]
+        status, task = request_json(
+            client,
+            "PATCH",
+            f"/api/cases/{created['case_id']}/tasks/{task_id}",
+            {"input_data": {"deceased_name": profile["deceased"]["name"]}},
+        )
+        assert status == 200
+        assert task["input_data"]["deceased_name"] == profile["deceased"]["name"]
+        status, approval = request_json(
+            client,
+            "POST",
+            f"/api/cases/{created['case_id']}/tasks/{task_id}/prepare",
+        )
+        assert status == 200
+        assert approval["status"] == "pending"
+        assert client.open(
+            f"{FRONTEND_URL}/life-events/{created['case_id']}/task/{task_id}/review"
+            f"?approval={approval['id']}",
+            timeout=10,
+        ).status == 200
+        status, receipt = request_json(
+            client, "POST", f"/api/approvals/{approval['id']}/approve"
+        )
+        assert status == 200
+        assert receipt["status"] == "submitted"
+        assert receipt["external_reference_id"].startswith("CB/")
 
     assert time.monotonic() - started_at < 30
 

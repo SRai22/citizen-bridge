@@ -35,8 +35,9 @@ async def start_intake(
     category_id: str,
     model: str,
 ) -> ConversationResponse:
-    opening = (
-        "I’m here to help. Please briefly describe what happened and who needs the service."
+    opening = OPENING_MESSAGES.get(
+        category_id,
+        "I’m here to help. Please briefly describe what happened and who needs the service.",
     )
     conversation = Conversation(
         user_id=user_id,
@@ -59,6 +60,20 @@ async def start_intake(
     return ConversationResponse(
         conversation_id=conversation.id, message=opening, status="in_progress"
     )
+
+
+OPENING_MESSAGES = {
+    "bereavement": (
+        "I’m sorry for your loss. Could you tell me who passed away and your relationship to them?"
+    ),
+    "new_baby": "Congratulations! When was the baby born?",
+    "address_change": "When did you move, and which records or utilities need the new address?",
+    "retirement": "Are you retiring or did you recently lose your job?",
+    "marriage": "Congratulations! When and where did the marriage take place?",
+    "property": "What property or land matter would you like help with?",
+    "education": "Who is the student, and what education service do they need?",
+    "senior_services": "Which senior citizen service would you like help arranging?",
+}
 
 
 async def send_intake_message(

@@ -1,0 +1,199 @@
+known_stages: &known_stages
+  - id: submitted
+    label: Submitted
+    description: Application received by the authority.
+    order: 1
+  - id: under_review
+    label: Under Review
+    description: Application is being checked by the responsible office.
+    order: 2
+  - id: approved
+    label: Approved
+    description: Application approved and the result is being prepared.
+    order: 3
+  - id: issued
+    label: Issued
+    description: Result is ready for collection or download.
+    order: 4
+
+workflows:
+  - id: death_certificate
+    description: Register a death and obtain the official death certificate.
+    adapter_type: death_certificate
+    applicability_rules:
+      - {field: deceased.is_deceased, equals: true}
+      - {field: location.state, equals: Karnataka}
+    tasks:
+      - {id: death_registration, name: Register Death and Obtain Certificate, estimated_duration_days: 7}
+    inter_workflow_dependencies: []
+    stages: *known_stages
+    typical_duration_days: [3, 7]
+
+  - id: family_pension
+    description: Transfer a deceased pensioner's family pension to the surviving spouse.
+    adapter_type: family_pension
+    applicability_rules:
+      - {field: deceased.pension_status, equals: active}
+      - {field: surviving_spouse.exists, equals: true}
+    tasks:
+      - {id: family_pension_application, name: Apply for Family Pension, estimated_duration_days: 30}
+    inter_workflow_dependencies: [death_certificate]
+    stages: []
+    typical_duration_days: [15, 30]
+
+  - id: bescom_transfer
+    description: Transfer a Bengaluru electricity connection to an heir.
+    adapter_type: bescom
+    applicability_rules:
+      - {field: assets.bescom, equals: true}
+      - {field: deceased.was_electricity_account_holder, equals: true}
+    tasks:
+      - {id: bescom_name_transfer, name: Transfer BESCOM Account Holder, estimated_duration_days: 15}
+    inter_workflow_dependencies: [death_certificate]
+    stages: *known_stages
+    typical_duration_days: [7, 15]
+
+  - id: ration_card
+    description: Remove the deceased member and appoint a new household head.
+    adapter_type: ration_card
+    applicability_rules:
+      - {field: assets.ration_card, equals: true}
+      - {field: deceased.was_head_of_household, equals: true}
+    tasks:
+      - {id: ration_card_modification, name: Update Ration Card Household, estimated_duration_days: 30}
+    inter_workflow_dependencies: [death_certificate]
+    stages: []
+    typical_duration_days: [15, 30]
+
+  - id: legal_heir_certificate
+    description: Obtain a certificate identifying the lawful heirs of the deceased.
+    adapter_type: legal_heir_certificate
+    dynamic: true
+    applicability_rules:
+      - {field: deceased.is_deceased, equals: true}
+    tasks:
+      - {id: legal_heir_application, name: Apply for Legal Heir Certificate, estimated_duration_days: 14}
+    inter_workflow_dependencies: [death_certificate]
+    stages: *known_stages
+    typical_duration_days: [7, 14]
+
+  - &new_baby_workflow
+    id: birth_certificate
+    description: Register a child's birth and obtain the official certificate.
+    adapter_type: birth_certificate
+    applicability_rules: [{field: category_id, equals: new_baby}]
+    tasks: [{id: birth_registration, name: Register Birth, estimated_duration_days: 7}]
+    inter_workflow_dependencies: []
+    stages: *known_stages
+    typical_duration_days: [3, 7]
+
+  - <<: *new_baby_workflow
+    id: aadhaar_enrollment
+    description: Enroll a child for Aadhaar.
+    adapter_type: aadhaar_enrollment
+    tasks: [{id: aadhaar_registration, name: Enroll for Aadhaar, estimated_duration_days: 30}]
+    inter_workflow_dependencies: [birth_certificate]
+    typical_duration_days: [15, 30]
+
+  - <<: *new_baby_workflow
+    id: vaccination_registration
+    description: Register a child for public vaccinations.
+    adapter_type: vaccination_registration
+    tasks: [{id: vaccination_signup, name: Register Vaccination Schedule, estimated_duration_days: 3}]
+    inter_workflow_dependencies: [birth_certificate]
+    stages: []
+    typical_duration_days: [1, 3]
+
+  - &address_workflow
+    id: electricity_transfer
+    description: Transfer an electricity connection after moving.
+    adapter_type: electricity_transfer
+    applicability_rules: [{field: category_id, equals: address_change}]
+    tasks: [{id: transfer_electricity, name: Transfer Electricity Connection, estimated_duration_days: 15}]
+    inter_workflow_dependencies: []
+    stages: *known_stages
+    typical_duration_days: [7, 15]
+
+  - <<: *address_workflow
+    id: water_transfer
+    description: Transfer a water connection after moving.
+    adapter_type: water_transfer
+    tasks: [{id: transfer_water, name: Transfer Water Connection, estimated_duration_days: 21}]
+    typical_duration_days: [7, 21]
+
+  - <<: *address_workflow
+    id: ration_card_address_update
+    description: Update the household address on a ration card.
+    adapter_type: ration_card_address_update
+    tasks: [{id: update_ration_address, name: Update Ration Card Address, estimated_duration_days: 30}]
+    stages: []
+    typical_duration_days: [7, 30]
+
+  - <<: *address_workflow
+    id: voter_id_update
+    description: Update the address on a voter identity record.
+    adapter_type: voter_id_update
+    tasks: [{id: update_voter_address, name: Update Voter ID Address, estimated_duration_days: 30}]
+    typical_duration_days: [14, 30]
+
+  - &retirement_workflow
+    id: provident_fund_claim
+    description: Claim or transfer an eligible provident fund balance.
+    adapter_type: provident_fund_claim
+    applicability_rules: [{field: category_id, equals: retirement}]
+    tasks: [{id: claim_provident_fund, name: Claim Provident Fund, estimated_duration_days: 20}]
+    inter_workflow_dependencies: []
+    stages: *known_stages
+    typical_duration_days: [7, 20]
+
+  - <<: *retirement_workflow
+    id: pension_application
+    description: Apply for an eligible retirement pension.
+    adapter_type: pension_application
+    tasks: [{id: apply_for_pension, name: Apply for Pension, estimated_duration_days: 60}]
+    stages: []
+    typical_duration_days: [30, 60]
+
+  - <<: *retirement_workflow
+    id: unemployment_support
+    description: Apply for available employment and income support.
+    adapter_type: unemployment_support
+    tasks: [{id: apply_for_support, name: Apply for Unemployment Support, estimated_duration_days: 30}]
+    stages: []
+    typical_duration_days: [7, 30]
+
+  - &marriage_workflow
+    id: marriage_certificate
+    description: Register a marriage and obtain the official certificate.
+    adapter_type: marriage_certificate
+    applicability_rules: [{field: category_id, equals: marriage}]
+    tasks: [{id: marriage_registration, name: Register Marriage, estimated_duration_days: 30}]
+    inter_workflow_dependencies: []
+    stages: *known_stages
+    typical_duration_days: [7, 30]
+
+  - <<: *marriage_workflow
+    id: property_mutation
+    description: Update property records after a change in ownership.
+    adapter_type: property_mutation
+    applicability_rules: [{field: category_id, equals: property}]
+    tasks: [{id: mutation_application, name: Apply for Property Mutation, estimated_duration_days: 45}]
+    typical_duration_days: [15, 45]
+
+  - <<: *marriage_workflow
+    id: scholarship_application
+    description: Apply for an eligible education scholarship.
+    adapter_type: scholarship_application
+    applicability_rules: [{field: category_id, equals: education}]
+    tasks: [{id: scholarship_form, name: Apply for Scholarship, estimated_duration_days: 45}]
+    stages: []
+    typical_duration_days: [15, 45]
+
+  - <<: *marriage_workflow
+    id: senior_pension
+    description: Apply for senior citizen pension support.
+    adapter_type: senior_pension
+    applicability_rules: [{field: category_id, equals: senior_services}]
+    tasks: [{id: senior_pension_form, name: Apply for Senior Pension, estimated_duration_days: 60}]
+    stages: []
+    typical_duration_days: [30, 60]

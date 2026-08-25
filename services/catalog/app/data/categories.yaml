@@ -1,0 +1,71 @@
+categories:
+  - id: bereavement
+    title: Someone Passed Away
+    subtitle: Death certificate, pension, utilities, ration card
+    icon: dove
+    description: Handle administrative formalities after a family member's death.
+    services:
+      - death_certificate
+      - family_pension_transfer
+      - electricity_name_transfer
+      - ration_card_update
+      - legal_heir_certificate
+
+  - id: new_baby
+    title: New Baby in the Family
+    subtitle: Birth certificate, Aadhaar, vaccination
+    icon: baby
+    description: Register a birth and arrange the child's essential records and services.
+    services:
+      - birth_certificate
+      - aadhaar_enrollment
+      - vaccination_registration
+
+  - id: address_change
+    title: Moving to a New Address
+    subtitle: Utilities, ration card, voter ID
+    icon: home
+    description: Update government records and utilities after a move.
+    services:
+      - electricity_transfer
+      - water_transfer
+      - ration_card_address_update
+      - voter_id_update
+
+  - id: retirement
+    title: Lost Job or Retiring
+    subtitle: Provident fund, pension, benefits
+    icon: briefcase
+    description: Find income support and complete retirement formalities.
+    services:
+      - provident_fund_claim
+      - pension_application
+      - unemployment_support
+
+  - id: marriage
+    title: Marriage
+    subtitle: Marriage certificate, name change, joint accounts
+    icon: rings
+    description: Register a marriage and coordinate related record changes.
+    services: [marriage_certificate]
+
+  - id: property
+    title: Property or Land
+    subtitle: Mutation, tax, registration
+    icon: building
+    description: Navigate property registration, ownership, and tax services.
+    services: [property_mutation]
+
+  - id: education
+    title: Education
+    subtitle: Scholarships, certificates, admissions
+    icon: education
+    description: Find education records, admissions, and financial support.
+    services: [scholarship_application]
+
+  - id: senior_services
+    title: Senior Citizen Services
+    subtitle: Pension, health, travel concessions
+    icon: senior
+    description: Find services and benefits available to senior citizens.
+    services: [senior_pension]

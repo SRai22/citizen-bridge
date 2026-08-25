@@ -2,10 +2,12 @@ import type {
   ApprovalRequest,
   AuthSession,
   CaseOverview,
+  CatalogService,
   CitizenCase,
   DocumentRequirement,
   ExternalApplication,
   IntakeConfirmation,
+  IntakeHouseholdProfile,
   IntakeResponse,
   LifeEventCategory,
   RejectionInterpretation,
@@ -71,8 +73,13 @@ export function getCategories(): Promise<{ categories: LifeEventCategory[] }> {
   return request("/api/catalog/categories");
 }
 
-export function startIntake(signal?: AbortSignal): Promise<IntakeResponse> {
-  return request<IntakeResponse>("/api/intake/start", { method: "POST", signal });
+export function startIntake(categoryId: string, signal?: AbortSignal): Promise<IntakeResponse> {
+  return request<IntakeResponse>("/api/intake/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ category_id: categoryId }),
+    signal,
+  });
 }
 
 export function sendIntakeMessage(
@@ -86,10 +93,73 @@ export function sendIntakeMessage(
   });
 }
 
-export function confirmIntake(sessionId: string): Promise<IntakeConfirmation> {
-  return request<IntakeConfirmation>(`/api/intake/${encodeURIComponent(sessionId)}/confirm`, {
+export async function confirmIntake(
+  sessionId: string,
+  categoryId: string,
+): Promise<IntakeConfirmation> {
+  const { profile } = await request<{ profile: IntakeHouseholdProfile }>(
+    `/api/intake/${encodeURIComponent(sessionId)}/confirm`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ profile_confirmed: true }),
   });
+  const bereavement = categoryId === "bereavement";
+  return request<IntakeConfirmation>("/api/cases", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      life_event: {
+        type: categoryId,
+        context: {
+          category_id: categoryId,
+          ...(bereavement
+            ? {
+                deceased: {
+                  is_deceased: true,
+                  pension_status: profile.deceased.pension_status,
+                  was_electricity_account_holder: profile.assets.bescom,
+                  was_head_of_household: true,
+                },
+                surviving_spouse: { exists: profile.surviving_members.length > 0 },
+                location: { state: profile.location.state },
+                assets: profile.assets,
+              }
+            : {}),
+        },
+      },
+      household_profile: {
+        location_city: profile.location.city,
+        location_state: profile.location.state,
+        people: [
+          {
+            name: profile.deceased.name,
+            relationship: profile.deceased.relationship,
+            role: null,
+            is_deceased: bereavement,
+            attributes: {
+              occupation: profile.deceased.occupation,
+              pension_status: profile.deceased.pension_status,
+            },
+          },
+          ...profile.surviving_members.map((person) => ({
+            name: person.name,
+            relationship: person.relationship,
+            role: null,
+            is_deceased: false,
+            attributes: {
+              occupation: person.occupation,
+              pension_status: person.pension_status,
+            },
+          })),
+        ],
+      },
+      ...(bereavement ? { subject_person_index: 0, subject_relationship: profile.deceased.relationship } : {}),
+    }),
+  });
+}
+
+export function getCatalogServices(): Promise<{ services: CatalogService[] }> {
+  return request("/api/catalog/services");
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {

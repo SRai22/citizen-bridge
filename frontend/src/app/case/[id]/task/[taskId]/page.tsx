@@ -1,39 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { ApprovalDialog } from "@/components/approval-dialog";
 import { ErrorState, LoadingState } from "@/components/page-state";
 import { RejectionReplan } from "@/components/rejection-replan";
 import { StatusBadge } from "@/components/status-badge";
-import {
-  fieldsForTask,
-  TaskFormField,
-  TaskSubmissionForm,
-} from "@/components/task-submission-form";
+import { TaskSubmissionForm } from "@/components/task-submission-form";
 import {
   ApiError,
-  approveSubmission,
-  getCase,
+  getCaseOverview,
   getTask,
   getTaskRequirements,
   prepareTask,
-  rejectSubmission,
   updateTaskInput,
 } from "@/lib/api";
 import { documentLabel, formatDateTime, statusMessage, titleCase } from "@/lib/presentation";
 import type {
   ApprovalRequest,
+  CaseOverview,
   CitizenCase,
   DocumentRequirement,
   ExternalApplication,
   TaskDetail,
 } from "@/types/api";
 
-type BusyAction = "prepare" | "approve" | "cancel" | null;
-type ApprovalDetail = { label: string; value: string };
+type BusyAction = "prepare" | null;
 
 function isApprovalRequest(
   outcome: ApprovalRequest | ExternalApplication,
@@ -57,32 +50,15 @@ function resultError(application: ExternalApplication): string | null {
   return "The authority could not accept this submission. Review the details and try again.";
 }
 
-function detailsFromValues(
-  task: TaskDetail,
-  fields: TaskFormField[],
-  values: Record<string, unknown>,
-): ApprovalDetail[] {
-  return [
-    { label: "Action", value: task.title },
-    ...fields.flatMap((field) => {
-      const value = values[field.name];
-      return typeof value === "string" && value.trim()
-        ? [{ label: field.label, value: value.trim() }]
-        : [];
-    }),
-  ];
-}
-
 export default function TaskDetailPage() {
   const { id, taskId } = useParams<{ id: string; taskId: string }>();
+  const router = useRouter();
   const [task, setTask] = useState<TaskDetail | null>(null);
-  const [citizenCase, setCitizenCase] = useState<CitizenCase | null>(null);
+  const [citizenCase, setCitizenCase] = useState<CaseOverview | CitizenCase | null>(null);
   const [requirements, setRequirements] = useState<DocumentRequirement[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [approval, setApproval] = useState<ApprovalRequest | null>(null);
-  const [approvalDetails, setApprovalDetails] = useState<ApprovalDetail[]>([]);
   const [busyAction, setBusyAction] = useState<BusyAction>(null);
   const [attempt, setAttempt] = useState(0);
 
@@ -90,7 +66,7 @@ export default function TaskDetailPage() {
     const controller = new AbortController();
     Promise.all([
       getTask(id, taskId, controller.signal),
-      getCase(id, controller.signal),
+      getCaseOverview(id, controller.signal),
       getTaskRequirements(id, taskId, controller.signal),
     ])
       .then(([loadedTask, loadedCase, loadedRequirements]) => {
@@ -101,15 +77,8 @@ export default function TaskDetailPage() {
           (candidate) => candidate.status === "pending",
         );
         if (pendingApproval) {
-          const inputData = pendingApproval.context.input_data;
-          const values = inputData && typeof inputData === "object" ? inputData : {};
-          setApproval(pendingApproval);
-          setApprovalDetails(
-            detailsFromValues(
-              loadedTask,
-              fieldsForTask(loadedTask),
-              values as Record<string, unknown>,
-            ),
+          router.replace(
+            `/life-events/${encodeURIComponent(id)}/task/${encodeURIComponent(taskId)}/review?approval=${encodeURIComponent(pendingApproval.id)}`,
           );
         }
       })
@@ -118,12 +87,12 @@ export default function TaskDetailPage() {
         setLoadError(errorMessage(reason));
       });
     return () => controller.abort();
-  }, [attempt, id, taskId]);
+  }, [attempt, id, router, taskId]);
 
   async function refreshData() {
     const [loadedTask, loadedCase, loadedRequirements] = await Promise.all([
       getTask(id, taskId),
-      getCase(id),
+      getCaseOverview(id),
       getTaskRequirements(id, taskId),
     ]);
     setTask(loadedTask);
@@ -131,7 +100,7 @@ export default function TaskDetailPage() {
     setRequirements(loadedRequirements);
   }
 
-  async function handlePrepare(values: Record<string, unknown>, fields: TaskFormField[]) {
+  async function handlePrepare(values: Record<string, unknown>) {
     if (!task) return;
     setBusyAction("prepare");
     setActionError(null);
@@ -144,8 +113,9 @@ export default function TaskDetailPage() {
       const outcome = await prepareTask(id, taskId);
       await refreshData();
       if (isApprovalRequest(outcome)) {
-        setApproval(outcome);
-        setApprovalDetails(detailsFromValues(task, fields, values));
+        router.push(
+          `/life-events/${encodeURIComponent(id)}/task/${encodeURIComponent(taskId)}/review?approval=${encodeURIComponent(outcome.id)}`,
+        );
       } else {
         const failure = resultError(outcome);
         setActionError(failure);
@@ -158,41 +128,17 @@ export default function TaskDetailPage() {
     }
   }
 
-  async function handleApprove() {
-    if (!approval) return;
-    setBusyAction("approve");
-    setActionError(null);
-    try {
-      const application = await approveSubmission(approval.id);
-      setApproval(null);
-      await refreshData();
-      const failure = resultError(application);
-      setActionError(failure);
-      if (!failure) setNotice("Submission approved and completed successfully.");
-    } catch (reason) {
-      setActionError(errorMessage(reason));
-    } finally {
-      setBusyAction(null);
-    }
-  }
-
-  async function handleCancel() {
-    if (!approval) return;
-    setBusyAction("cancel");
-    setActionError(null);
-    try {
-      await rejectSubmission(approval.id);
-      setApproval(null);
-      await refreshData();
-      setNotice("Submission cancelled. Your details are saved and the task is ready to edit.");
-    } catch (reason) {
-      setActionError(errorMessage(reason));
-    } finally {
-      setBusyAction(null);
-    }
-  }
-
-  const tasksById = new Map(citizenCase?.tasks.map((candidate) => [candidate.id, candidate]) ?? []);
+  const caseTasks = !citizenCase
+    ? []
+    : "tasks_by_group" in citizenCase
+      ? Object.values(citizenCase.tasks_by_group).flat().map((candidate) => ({
+          id: candidate.task_id,
+          workflow_id: candidate.workflow_id,
+          title: candidate.title,
+          status: candidate.status,
+        }))
+      : citizenCase.tasks;
+  const tasksById = new Map(caseTasks.map((candidate) => [candidate.id, candidate]));
   const displayedRequirements = [...requirements];
   const requirementTypes = new Set(displayedRequirements.map((requirement) => requirement.type));
   for (const dependency of task?.dependencies ?? []) {
@@ -205,7 +151,7 @@ export default function TaskDetailPage() {
         type: prerequisite.workflow_id,
         owner: "applicant",
         description: `Produced by ${prerequisite.title}.`,
-        status: citizenCase?.documents.some(
+        status: citizenCase && "documents" in citizenCase && citizenCase.documents.some(
           (document) =>
             document.document_type === prerequisite.workflow_id &&
             document.verification_status !== "rejected",
@@ -240,7 +186,7 @@ export default function TaskDetailPage() {
           <>
             <Link
               className="inline-flex items-center gap-2 text-sm font-bold text-cyan-800 hover:text-cyan-950"
-              href={`/case/${id}`}
+              href={`/life-events/${id}`}
             >
               <span aria-hidden="true">←</span> Back to case
             </Link>
@@ -306,7 +252,7 @@ export default function TaskDetailPage() {
                     <ul className="mt-5 space-y-4">
                       {displayedRequirements.map((document) => {
                         const available = document.status === "satisfied";
-                        const producer = citizenCase.tasks.find(
+                        const producer = caseTasks.find(
                           (candidate) => candidate.workflow_id === document.type,
                         );
                         return (
@@ -333,7 +279,7 @@ export default function TaskDetailPage() {
                                     Produced by:{" "}
                                     <Link
                                       className="font-semibold text-cyan-800"
-                                      href={`/case/${id}/task/${producer.id}`}
+                                      href={`/life-events/${id}/task/${producer.id}`}
                                     >
                                       {producer.title}
                                     </Link>
@@ -386,7 +332,7 @@ export default function TaskDetailPage() {
 
               <TaskSubmissionForm
                 busy={busyAction === "prepare"}
-                error={approval ? null : actionError}
+                error={actionError}
                 key={task.id}
                 onSubmit={handlePrepare}
                 task={task}
@@ -421,17 +367,6 @@ export default function TaskDetailPage() {
             </article>
           </>
         ) : null}
-
-      {approval ? (
-        <ApprovalDialog
-          approval={approval}
-          busyAction={busyAction === "approve" || busyAction === "cancel" ? busyAction : null}
-          details={approvalDetails}
-          error={actionError}
-          onApprove={handleApprove}
-          onCancel={handleCancel}
-        />
-      ) : null}
     </div>
   );
 }

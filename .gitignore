@@ -23,6 +23,8 @@ coverage/
 *.db-shm
 *.db-wal
 data/
+!services/catalog/app/data/
+!services/catalog/app/data/*
 
 # Editors and operating systems
 .idea/

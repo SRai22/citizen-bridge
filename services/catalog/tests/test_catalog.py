@@ -16,6 +16,10 @@ async def test_catalog_http_api(client) -> None:
         "new_baby",
         "address_change",
         "retirement",
+        "marriage",
+        "property",
+        "education",
+        "senior_services",
     }
 
     bereavement = await client.get("/api/catalog/categories/bereavement")

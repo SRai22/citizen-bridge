@@ -16,7 +16,14 @@ import dagre from "dagre";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo } from "react";
 
-import type { Task, TaskStatus } from "@/types/api";
+import type { TaskStatus } from "@/types/api";
+
+export interface DependencyGraphTask {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  dependencies: Array<{ depends_on_task_id: string }>;
+}
 
 // -- Status → visual mapping ---------------------------------------------------
 
@@ -51,7 +58,7 @@ function TaskNode({ data }: NodeProps<Node<{ label: string; status: TaskStatus; 
 
   return (
     <button
-      onClick={() => router.push(`/case/${data.caseId}/task/${data.taskId}`)}
+      onClick={() => router.push(`/life-events/${data.caseId}/task/${data.taskId}`)}
       className="cursor-pointer rounded-xl px-4 py-3 text-left shadow-sm transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2"
       style={{ background: colors.bg, border: `2px solid ${colors.border}`, minWidth: 160 }}
     >
@@ -104,7 +111,7 @@ function layoutGraph(nodes: Node[], edges: Edge[]): Node[] {
 // -- Main component ------------------------------------------------------------
 
 interface DependencyGraphProps {
-  tasks: Task[];
+  tasks: DependencyGraphTask[];
   caseId: string;
 }
 

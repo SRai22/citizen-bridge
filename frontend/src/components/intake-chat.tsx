@@ -13,7 +13,7 @@ interface ChatMessage {
   content: string;
 }
 
-export function IntakeChat() {
+export function IntakeChat({ categoryId }: { categoryId: string }) {
   const router = useRouter();
   const nextMessageId = useRef(0);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -27,9 +27,9 @@ export function IntakeChat() {
 
   useEffect(() => {
     const controller = new AbortController();
-    startIntake(controller.signal)
+    startIntake(categoryId, controller.signal)
       .then((response) => {
-        setSessionId(response.session_id);
+        setSessionId(response.conversation_id);
         setMessages([
           { id: nextMessageId.current++, role: "system", content: response.message },
         ]);
@@ -41,7 +41,7 @@ export function IntakeChat() {
         setStarting(false);
       });
     return () => controller.abort();
-  }, [attempt]);
+  }, [attempt, categoryId]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -76,8 +76,8 @@ export function IntakeChat() {
     setError(null);
     setBusy(true);
     try {
-      const confirmation = await confirmIntake(sessionId);
-      router.push(`/case/${encodeURIComponent(confirmation.case_id)}`);
+      const confirmation = await confirmIntake(sessionId, categoryId);
+      router.push(`/life-events/${encodeURIComponent(confirmation.case_id)}`);
     } catch (reason) {
       setError(messageFor(reason));
       setBusy(false);

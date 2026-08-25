@@ -29,6 +29,7 @@ async def test_mock_intake_persists_and_confirms_profile(ai_context) -> None:
         headers=auth(user_id),
     )
     assert started.status_code == 201
+    assert "sorry for your loss" in started.json()["message"].lower()
     conversation_id = started.json()["conversation_id"]
 
     for turn in range(4):

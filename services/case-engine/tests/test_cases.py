@@ -158,6 +158,42 @@ async def test_failed_task_uses_ai_rejection_interpretation(case_context) -> Non
 
 
 @pytest.mark.asyncio
+async def test_task_review_creates_approval_and_submission_receipt(case_context) -> None:
+    client, _, users, _, _ = case_context
+    user_id = uuid4()
+    users.add(user_id)
+    created = await client.post("/api/cases", headers=headers(user_id), json=payload())
+    case_id = created.json()["case_id"]
+    task_id = created.json()["tasks_by_group"]["ready"][0]["task_id"]
+
+    updated = await client.patch(
+        f"/api/cases/{case_id}/tasks/{task_id}/detail",
+        headers=headers(user_id),
+        json={"input_data": {"deceased_name": "Rajesh Kumar"}},
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["input_data"]["deceased_name"] == "Rajesh Kumar"
+
+    prepared = await client.post(
+        f"/api/cases/{case_id}/tasks/{task_id}/prepare",
+        headers=headers(user_id),
+    )
+    assert prepared.status_code == 200, prepared.text
+    assert prepared.json()["status"] == "pending"
+
+    approved = await client.post(
+        f"/api/approvals/{prepared.json()['id']}/approve",
+        headers=headers(user_id),
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "submitted"
+    assert approved.json()["external_reference_id"].startswith("CB/DEATH_CERTIFICATE/")
+
+    case = await client.get(f"/api/cases/{case_id}", headers=headers(user_id))
+    assert case.json()["tasks_by_group"]["waiting"][0]["task_id"] == task_id
+
+
+@pytest.mark.asyncio
 async def test_case_can_be_created_for_a_family_member(case_context) -> None:
     client, _, users, _, events = case_context
     user_id = uuid4()

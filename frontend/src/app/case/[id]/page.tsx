@@ -1,23 +1,20 @@
 "use client";
 
+import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { DependencyGraph, type DependencyGraphTask } from "@/components/dependency-graph";
 import { ErrorState, LoadingState } from "@/components/page-state";
 import { StatusBadge } from "@/components/status-badge";
 import { ApiError, getCaseOverview } from "@/lib/api";
+import { formatDate, formatDateTime } from "@/lib/presentation";
 import type { CaseOverview, CaseTask } from "@/types/api";
-
-const groups: Array<[keyof CaseOverview["tasks_by_group"], string]> = [
-  ["ready", "Ready now"],
-  ["waiting", "In progress"],
-  ["blocked", "Coming next"],
-  ["completed", "Completed"],
-];
 
 export default function CaseOverviewPage() {
   const { id } = useParams<{ id: string }>();
   const [citizenCase, setCitizenCase] = useState<CaseOverview | null>(null);
+  const [graphOpen, setGraphOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
@@ -32,67 +29,121 @@ export default function CaseOverviewPage() {
     return () => controller.abort();
   }, [attempt, id]);
 
+  const allTasks = useMemo(
+    () => citizenCase ? Object.values(citizenCase.tasks_by_group).flat() : [],
+    [citizenCase],
+  );
+  const graphTasks: DependencyGraphTask[] = allTasks.map((task) => ({
+    id: task.task_id,
+    title: task.title,
+    status: task.status,
+    dependencies: task.blocked_by_task_ids.map((taskId) => ({ depends_on_task_id: taskId })),
+  }));
+
+  if (error) {
+    return <ErrorState message={error} onRetry={() => { setError(null); setCitizenCase(null); setAttempt((value) => value + 1); }} />;
+  }
+  if (!citizenCase) return <LoadingState label="Loading your case…" />;
+
   return (
     <div className="mx-auto max-w-5xl py-2 sm:py-3">
-        {error ? (
-          <ErrorState
-            message={error}
-            onRetry={() => {
-              setError(null);
-              setCitizenCase(null);
-              setAttempt((value) => value + 1);
-            }}
-          />
-        ) : null}
-        {!error && !citizenCase ? <LoadingState label="Loading your case…" /> : null}
-        {citizenCase ? (
-          <>
-            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-              <p className="text-sm font-bold uppercase tracking-[0.16em] text-cyan-700">Case overview</p>
-              <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h1 className="text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">{citizenCase.title}</h1>
-                  <p className="mt-3 text-sm text-slate-500">Case #{citizenCase.case_id.slice(0, 8)} · You are the {citizenCase.my_role}</p>
-                </div>
-                <StatusBadge status={citizenCase.status} />
-              </div>
-              <p className="mt-6 text-sm font-semibold text-slate-700">
-                {citizenCase.progress.completed} of {citizenCase.progress.total} tasks completed
-              </p>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100" aria-label="Case progress" role="progressbar" aria-valuemax={citizenCase.progress.total} aria-valuemin={0} aria-valuenow={citizenCase.progress.completed}>
-                <div className="h-full rounded-full bg-teal-600" style={{ width: `${citizenCase.progress.total ? (citizenCase.progress.completed / citizenCase.progress.total) * 100 : 0}%` }} />
-              </div>
-            </section>
-
-            <div className="mt-8 space-y-8">
-              {groups.map(([key, title]) => {
-                const tasks = citizenCase.tasks_by_group[key];
-                return tasks.length ? <TaskGroup key={key} tasks={tasks} title={title} /> : null;
-              })}
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-4">
+            <span aria-hidden="true" className="grid size-12 shrink-0 place-items-center rounded-2xl bg-teal-50 text-2xl text-teal-800">◎</span>
+            <div>
+              <p className="text-sm font-bold uppercase tracking-[0.16em] text-teal-700">Active life event</p>
+              <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">{citizenCase.title}</h1>
+              <p className="mt-3 text-sm text-slate-500">Created {formatDate(citizenCase.created_at)} · {citizenCase.progress.completed} of {citizenCase.progress.total} completed</p>
             </div>
-          </>
-        ) : null}
+          </div>
+          <StatusBadge status={citizenCase.status} />
+        </div>
+        <div aria-label="Case progress" aria-valuemax={citizenCase.progress.total} aria-valuemin={0} aria-valuenow={citizenCase.progress.completed} className="mt-6 h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar">
+          <div className="h-full rounded-full bg-teal-600" style={{ width: `${citizenCase.progress.total ? (citizenCase.progress.completed / citizenCase.progress.total) * 100 : 0}%` }} />
+        </div>
+      </section>
+
+      {!allTasks.length ? (
+        <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-10 text-center">
+          <p className="text-lg font-bold text-slate-950">Setting up your action plan...</p>
+          <p className="mt-2 text-sm text-slate-500">Your tasks will appear here shortly.</p>
+        </section>
+      ) : graphOpen ? (
+        <section className="mt-8">
+          <button className="mb-4 text-sm font-bold text-teal-800" onClick={() => setGraphOpen(false)} type="button">← Back to list</button>
+          <DependencyGraph caseId={id} tasks={graphTasks} />
+        </section>
+      ) : (
+        <div className="mt-8 space-y-8">
+          <TaskGroup caseId={id} kind="ready" tasks={citizenCase.tasks_by_group.ready} title="What to do next" />
+          <TaskGroup caseId={id} kind="waiting" tasks={citizenCase.tasks_by_group.waiting} title="Waiting" />
+          <TaskGroup allTasks={allTasks} caseId={id} kind="blocked" tasks={citizenCase.tasks_by_group.blocked} title="Blocked" />
+          {citizenCase.tasks_by_group.completed.length ? (
+            <details className="rounded-2xl border border-slate-200 bg-white p-5">
+              <summary className="cursor-pointer text-xl font-bold text-slate-950">Completed ({citizenCase.tasks_by_group.completed.length})</summary>
+              <TaskGroup caseId={id} compact kind="completed" tasks={citizenCase.tasks_by_group.completed} title="Completed tasks" />
+            </details>
+          ) : null}
+          <button className="text-sm font-bold text-teal-800 hover:text-teal-950" onClick={() => setGraphOpen(true)} type="button">View dependency graph →</button>
+        </div>
+      )}
     </div>
   );
 }
 
-function TaskGroup({ tasks, title }: { tasks: CaseTask[]; title: string }) {
+function TaskGroup({ allTasks = [], caseId, compact = false, kind, tasks, title }: {
+  allTasks?: CaseTask[];
+  caseId: string;
+  compact?: boolean;
+  kind: "ready" | "waiting" | "blocked" | "completed";
+  tasks: CaseTask[];
+  title: string;
+}) {
+  if (!tasks.length) return null;
   return (
-    <section>
-      <h2 className="text-xl font-bold text-slate-950">{title}</h2>
-      <ol className="mt-3 space-y-3">
-        {tasks.map((task) => (
-          <li className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" key={task.task_id}>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="font-bold text-slate-950">{task.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-600">{task.blocked_reason ?? task.description}</p>
-              </div>
-              <StatusBadge status={task.status} />
-            </div>
-          </li>
-        ))}
+    <section className={compact ? "mt-4" : undefined}>
+      <h2 className={compact ? "sr-only" : "text-xl font-bold text-slate-950"}>{title}</h2>
+      <ol className={`${compact ? "mt-0" : "mt-3"} space-y-3`}>
+        {tasks.map((task) => <TaskCard allTasks={allTasks} caseId={caseId} kind={kind} key={task.task_id} task={task} />)}
       </ol>
     </section>
   );
+}
+
+function TaskCard({ allTasks, caseId, kind, task }: { allTasks: CaseTask[]; caseId: string; kind: "ready" | "waiting" | "blocked" | "completed"; task: CaseTask }) {
+  const href = `/life-events/${caseId}/task/${task.task_id}`;
+  const dependencies = task.blocked_by_task_ids.map((taskId) => allTasks.find((candidate) => candidate.task_id === taskId)?.title ?? "a required earlier task");
+  if (kind === "blocked") {
+    return (
+      <li><details className="rounded-2xl border border-slate-200 bg-slate-100 p-5 text-slate-600"><summary className="cursor-pointer font-bold text-slate-800">{task.title}</summary><p className="mt-3 text-sm">Needs: {dependencies.join(", ")}</p><p className="mt-2 text-sm">{task.blocked_reason ?? "Complete the required task before starting this one."}</p></details></li>
+    );
+  }
+  return (
+    <li className={`rounded-2xl bg-white p-5 ${kind === "ready" ? "border-2 border-teal-500 shadow-md" : "border border-slate-200 shadow-sm"}`}>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="font-bold text-slate-950">{kind === "completed" ? "✓ " : ""}{task.title}</h3>
+          {task.description ? <p className="mt-2 text-sm leading-6 text-slate-600">{task.description}</p> : null}
+          {kind === "waiting" ? <WaitingState task={task} /> : null}
+          {kind === "completed" && task.completed_at ? <p className="mt-2 text-sm text-slate-500">Completed {formatDateTime(task.completed_at)}</p> : null}
+        </div>
+        {kind === "ready" ? <Link className="shrink-0 rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-teal-800" href={href}>Start this →</Link> : <StatusBadge status={task.status} />}
+      </div>
+    </li>
+  );
+}
+
+function WaitingState({ task }: { task: CaseTask }) {
+  const wait = task.wait_state;
+  if (wait?.stages_known && wait.stages.length) {
+    const current = wait.stages.findIndex((stage) => stage.id === wait.current_stage);
+    return (
+      <ol aria-label="Application progress" className="mt-4 flex flex-wrap gap-2">
+        {wait.stages.map((stage, index) => <li className={`rounded-full px-3 py-1 text-xs font-semibold ${index <= current ? "bg-teal-100 text-teal-900" : "bg-slate-100 text-slate-500"}`} key={stage.id}>{stage.label}</li>)}
+      </ol>
+    );
+  }
+  const estimate = wait?.estimated_wait;
+  return <p className="mt-3 text-sm font-medium text-slate-500">{task.wait_summary ?? (estimate?.max_days ? `Usually ${estimate.min_days ?? 1}–${estimate.max_days} days. We’ll notify you.` : "We’ll notify you when there’s an update.")}</p>;
 }

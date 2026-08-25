@@ -60,11 +60,16 @@ test("renders ownership, progress and grouped tasks", async () => {
 
   expect(screen.getByRole("status")).toHaveTextContent("Loading your case");
   expect(await screen.findByRole("heading", { name: citizenCase.title })).toBeInTheDocument();
-  expect(screen.getByText("You are the owner", { exact: false })).toBeInTheDocument();
-  expect(screen.getByText("0 of 2 tasks completed")).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Ready now" })).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Coming next" })).toBeInTheDocument();
+  expect(screen.getByText("0 of 2 completed", { exact: false })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "What to do next" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Blocked" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Start this →" })).toHaveAttribute(
+    "href",
+    "/life-events/case-12345678/task/task-ready",
+  );
+  expect(screen.getByText("Needs: Obtain Death Certificate")).toBeInTheDocument();
   expect(screen.getByText("Waiting for prerequisite tasks")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "View dependency graph →" })).toBeInTheDocument();
 });
 
 test("shows a retryable error when the gateway is unavailable", async () => {

@@ -32,13 +32,23 @@ test("loads the signed-in user's service categories and starts intake", async ()
     if (url.endsWith("/api/catalog/categories")) {
       return Promise.resolve(Response.json({
         categories: [
-          { id: "bereavement", title: "Someone Passed Away", description: "Build a plan." },
+          {
+            id: "bereavement",
+            title: "Someone Passed Away",
+            subtitle: "Death certificate, pension, utilities",
+            icon: "dove",
+            description: "Build a plan.",
+            service_count: 3,
+          },
         ],
       }));
     }
+    if (url.endsWith("/api/catalog/services")) {
+      return Promise.resolve(Response.json({ services: [] }));
+    }
     if (url.endsWith("/api/intake/start")) {
       return Promise.resolve(Response.json({
-        session_id: "intake-1",
+        conversation_id: "intake-1",
         status: "in_progress",
         message: "What happened?",
         profile: null,
@@ -52,6 +62,8 @@ test("loads the signed-in user's service categories and starts intake", async ()
   expect(screen.getByRole("status")).toHaveTextContent("Loading your services");
   expect(await screen.findByRole("heading", { name: "Welcome, Asha Rao" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /Someone Passed Away/ }));
+  expect(screen.getByRole("heading", { name: "Someone Passed Away" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /Start conversation/ }));
   expect(await screen.findByText("What happened?")).toBeInTheDocument();
 });
 

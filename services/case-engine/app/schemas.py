@@ -47,6 +47,10 @@ class TaskStageAdvance(RequestModel):
     stage: str = Field(min_length=1, max_length=100)
 
 
+class TaskInputUpdate(RequestModel):
+    input_data: dict[str, Any]
+
+
 class Progress(BaseModel):
     completed: int
     total: int
