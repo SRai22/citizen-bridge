@@ -70,9 +70,12 @@ services:
     volumes: *service-volumes
 
   ai:
-    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8007
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --reload --host 0.0.0.0 --port 8007"
     ports: ["8007:8007", "50057:50057"]
-    volumes: *service-volumes
+    volumes:
+      - ./services/ai/app:/app/services/ai/app
+      - ./services/ai/alembic:/app/services/ai/alembic
+      - ./contracts:/app/contracts
 
 volumes:
   frontend_node_modules:

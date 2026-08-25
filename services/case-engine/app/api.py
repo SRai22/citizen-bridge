@@ -9,7 +9,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.clients import AccessContext, AuthClient, AuthorityClient, CatalogClient, UserContext
+from app.clients import (
+    AccessContext,
+    AIClient,
+    AuthClient,
+    AuthorityClient,
+    CatalogClient,
+    UserContext,
+)
 from app.db import get_session
 from app.kafka import EventPublisher
 from app.models import Task
@@ -56,10 +63,15 @@ def catalog_client(request: Request) -> CatalogClient:
     return request.app.state.catalog_client
 
 
+def ai_client(request: Request) -> AIClient:
+    return request.app.state.ai_client
+
+
 AuthDep = Annotated[AuthClient, Depends(auth_client)]
 AuthorityDep = Annotated[AuthorityClient, Depends(authority_client)]
 PublisherDep = Annotated[EventPublisher, Depends(publisher)]
 CatalogDep = Annotated[CatalogClient, Depends(catalog_client)]
+AIDep = Annotated[AIClient, Depends(ai_client)]
 
 
 async def current_user(credentials: CredentialsDep, auth: AuthDep) -> AsyncIterator[UserContext]:
@@ -247,6 +259,7 @@ async def transition(
     session: SessionDep,
     authority: AuthorityDep,
     events: PublisherDep,
+    ai: AIDep,
 ) -> TaskResponse:
     decision = await access(authority, user.user_id, case_id, "submit")
     task = await session.scalar(
@@ -256,9 +269,18 @@ async def transition(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found")
     if task.status.value == "awaiting_approval" and payload.status.value == "submitted":
         decision = await access(authority, user.user_id, case_id, "approve")
+    output_data = dict(payload.output_data)
+    rejection_text = output_data.get("rejection_text")
+    if payload.status.value == "failed" and isinstance(rejection_text, str):
+        try:
+            output_data["rejection_interpretation"] = await ai.interpret_rejection(
+                str(task.id), rejection_text
+            )
+        except ConnectionError as exc:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
     try:
         await transition_task(
-            session, events, task, payload.status, UUID(user.user_id), payload.output_data
+            session, events, task, payload.status, UUID(user.user_id), output_data
         )
     except ValueError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc

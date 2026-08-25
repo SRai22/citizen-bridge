@@ -221,6 +221,7 @@ class EventConsumer:
 def _aggregate_id(event: dict[str, Any], aggregate_type: str) -> str:
     for key in (
         f"{aggregate_type}_id",
+        "conversation_id",
         "task_id",
         "case_id",
         "document_id",

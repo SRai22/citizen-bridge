@@ -3,6 +3,8 @@ from dataclasses import dataclass, field
 
 import grpc
 from contracts.generated import (
+    ai_pb2,
+    ai_pb2_grpc,
     auth_pb2,
     auth_pb2_grpc,
     authority_pb2,
@@ -139,6 +141,29 @@ class CatalogClient:
                 raise ValueError(exc.details()) from exc
             raise ConnectionError("Catalog service unavailable") from exc
         return [json.loads(workflow.definition_json) for workflow in response.workflows]
+
+    async def check(self) -> None:
+        await self.channel.channel_ready()
+
+    async def close(self) -> None:
+        await self.channel.close()
+
+
+class AIClient:
+    def __init__(self, target: str) -> None:
+        self.channel = grpc.aio.insecure_channel(target)
+        self.stub = ai_pb2_grpc.AIServiceStub(self.channel)
+
+    async def interpret_rejection(self, task_id: str, rejection_text: str) -> dict:
+        try:
+            response = await self.stub.InterpretRejection(
+                ai_pb2.InterpretRejectionRequest(
+                    task_id=task_id, rejection_text=rejection_text
+                )
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise ConnectionError("AI service unavailable") from exc
+        return {"reason": response.reason, "remediation_steps": list(response.remediation_steps)}
 
     async def check(self) -> None:
         await self.channel.channel_ready()

@@ -245,6 +245,8 @@ services:
         condition: service_healthy
       catalog:
         condition: service_healthy
+      ai:
+        condition: service_healthy
     environment:
       <<: *service-environment
       SERVICE_NAME: case-engine
@@ -253,6 +255,7 @@ services:
       AUTH_GRPC_HOST: auth:50051
       AUTHORITY_GRPC_HOST: authority:50052
       CATALOG_GRPC_HOST: catalog:50056
+      AI_GRPC_HOST: ai:50057
       DATABASE_URL: postgresql+asyncpg://case_service:${CASE_DB_PASSWORD}@postgres:5432/citizen_bridge
     expose: ["8003", "50053"]
 
@@ -317,6 +320,15 @@ services:
 
   ai:
     <<: *service-defaults
+    build:
+      context: .
+      dockerfile: services/ai/Dockerfile
+    image: citizen-bridge-ai:local
+    profiles: []
+    depends_on:
+      <<: *service-depends-on
+      auth:
+        condition: service_healthy
     environment:
       <<: *service-environment
       SERVICE_NAME: ai
@@ -325,6 +337,9 @@ services:
       DATABASE_URL: postgresql+asyncpg://ai_service:${AI_DB_PASSWORD}@postgres:5432/citizen_bridge
       AI_MOCK_MODE: ${AI_MOCK_MODE:-true}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      INTAKE_MODEL: ${AI_INTAKE_MODEL:-gpt-4o-mini}
+      REJECTION_MODEL: ${AI_REJECTION_MODEL:-gpt-4o}
+      AUTH_GRPC_HOST: auth:50051
     expose: ["8007", "50057"]
 
 networks:

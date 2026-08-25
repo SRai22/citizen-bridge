@@ -130,6 +130,34 @@ async def test_rejects_inconsistent_workflow_profile(case_context) -> None:
 
 
 @pytest.mark.asyncio
+async def test_failed_task_uses_ai_rejection_interpretation(case_context) -> None:
+    client, _, users, _, events = case_context
+    user_id = uuid4()
+    users.add(user_id)
+    created = await client.post("/api/cases", headers=headers(user_id), json=payload())
+    task_id = created.json()["tasks_by_group"]["ready"][0]["task_id"]
+    submitted = await client.post(
+        f"/api/cases/{created.json()['case_id']}/tasks/{task_id}/transition",
+        headers=headers(user_id),
+        json={"status": "submitted"},
+    )
+    assert submitted.status_code == 200
+
+    failed = await client.post(
+        f"/api/cases/{created.json()['case_id']}/tasks/{task_id}/transition",
+        headers=headers(user_id),
+        json={
+            "status": "failed",
+            "output_data": {"rejection_text": "Legal heir certificate required"},
+        },
+    )
+    assert failed.status_code == 200
+    assert events.events[-1][1]["output_data"]["rejection_interpretation"][
+        "remediation_steps"
+    ] == ["add_task:legal_heir_certificate:bescom_transfer"]
+
+
+@pytest.mark.asyncio
 async def test_case_can_be_created_for_a_family_member(case_context) -> None:
     client, _, users, _, events = case_context
     user_id = uuid4()

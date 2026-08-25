@@ -2,7 +2,7 @@
 set -eu
 
 repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-services=${*:-"auth authority case-engine catalog documents notifications"}
+services=${*:-"auth authority case-engine catalog documents notifications ai"}
 
 for service in $services; do
     image="citizen-bridge-$service:local"

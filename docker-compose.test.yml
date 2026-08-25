@@ -117,12 +117,15 @@ services:
       AUTH_GRPC_HOST: auth:50051
       AUTHORITY_GRPC_HOST: authority:50052
       CATALOG_GRPC_HOST: catalog:50056
+      AI_GRPC_HOST: ai:50057
       OTEL_ENABLED: "false"
     ports: ["18003:8003"]
     depends_on:
       authority:
         condition: service_healthy
       catalog:
+        condition: service_healthy
+      ai:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
@@ -184,6 +187,26 @@ services:
       postgres:
         condition: service_healthy
 
+  ai:
+    build:
+      context: .
+      dockerfile: services/ai/Dockerfile
+    environment:
+      SERVICE_NAME: ai
+      HTTP_PORT: 8007
+      GRPC_PORT: 50057
+      DATABASE_URL: postgresql+asyncpg://ai_service:test-ai-password@postgres:5432/citizen_bridge
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      AUTH_GRPC_HOST: auth:50051
+      AI_MOCK_MODE: "true"
+      OTEL_ENABLED: "false"
+    ports: ["18007:8007"]
+    depends_on:
+      auth:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+
   legacy-backend:
     build:
       context: ./backend
@@ -214,6 +237,8 @@ services:
       notifications:
         condition: service_healthy
       catalog:
+        condition: service_healthy
+      ai:
         condition: service_healthy
       legacy-backend:
         condition: service_healthy

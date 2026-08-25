@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
 os.environ.setdefault("OTEL_ENABLED", "false")
 
-from app.api import auth_client, authority_client, catalog_client, publisher
+from app.api import ai_client, auth_client, authority_client, catalog_client, publisher
 from app.clients import AccessContext, UserContext
 from app.db.base import Base
 from app.db.session import get_session
@@ -129,6 +129,14 @@ class FakeCatalog:
         ]
 
 
+class FakeAI:
+    async def interpret_rejection(self, task_id: str, rejection_text: str) -> dict:
+        return {
+            "reason": "A Legal Heir Certificate is required.",
+            "remediation_steps": ["add_task:legal_heir_certificate:bescom_transfer"],
+        }
+
+
 @pytest_asyncio.fixture
 async def case_context():
     engine = create_async_engine(
@@ -151,6 +159,7 @@ async def case_context():
     app.dependency_overrides[auth_client] = lambda: auth
     app.dependency_overrides[authority_client] = lambda: authority
     app.dependency_overrides[catalog_client] = lambda: FakeCatalog()
+    app.dependency_overrides[ai_client] = lambda: FakeAI()
     app.dependency_overrides[publisher] = lambda: events
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
