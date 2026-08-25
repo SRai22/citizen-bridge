@@ -2,6 +2,10 @@
 
 Your agent across all Indian public services.
 
+## My Services
+
+![My Services page](artifacts/services-page.png)
+
 Citizen Bridge is moving from a FastAPI monolith to independently deployable
 services using a strangler transition. The existing backend stays operational
 while each route moves behind a shared gateway.
@@ -15,7 +19,6 @@ services/        New services and the copyable Python service template
 contracts/       Versioned gRPC, event, constant, and observability contracts
 infrastructure/  Nginx and Kafka infrastructure assets
 docs/            Architecture and transition documentation
-tickets/         Sequenced implementation tickets
 ```
 
 The implementation order is defined in
