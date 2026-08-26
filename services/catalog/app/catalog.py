@@ -62,7 +62,15 @@ class Catalog:
                     (service.name, service.description, service.category, service.authority)
                 ).casefold()
             )
-        fields = {"id", "name", "authority", "category", "typical_wait_days", "stages_known"}
+        fields = {
+            "id",
+            "name",
+            "authority",
+            "category",
+            "typical_wait_days",
+            "stages_known",
+            "required_profile_fields",
+        }
         return [service.model_dump(include=fields) for service in matches]
 
     def applicable_workflows(self, profile: Mapping[str, object]) -> list[WorkflowDefinition]:

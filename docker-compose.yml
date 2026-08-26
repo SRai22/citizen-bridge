@@ -207,6 +207,7 @@ services:
       GRPC_PORT: 50051
       ACCESS_TOKEN_MINUTES: ${ACCESS_TOKEN_MINUTES:-15}
       REFRESH_TOKEN_DAYS: ${REFRESH_TOKEN_DAYS:-7}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN is required}
       DATABASE_URL: postgresql+asyncpg://auth_service:${AUTH_DB_PASSWORD}@postgres:5432/citizen_bridge
     expose: ["8001", "50051"]
 

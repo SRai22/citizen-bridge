@@ -97,6 +97,7 @@ async def test_task_documents_requirements_and_expiration(document_context) -> N
         document = await session.scalar(select(Document))
         assert document.verification_status == "expired"
     assert events.events[-1]["event_type"] == "document.expired"
+    assert any(event["event_type"] == "document.verified" for event in events.events)
 
 
 @pytest.mark.asyncio

@@ -54,3 +54,31 @@ class ProcessedEvent(Base):
     event_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     consumer_group: Mapped[str] = mapped_column(String(100))
+
+
+class ActivityEntry(Base):
+    __tablename__ = "activity_entries"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_event_id",
+            "user_id",
+            "activity_type",
+            name="uq_activity_source_user_type",
+        ),
+        {"schema": "notifications"},
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    source_event_id: Mapped[str] = mapped_column(String(36))
+    user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), index=True)
+    activity_type: Mapped[str] = mapped_column(String(50), index=True)
+    title: Mapped[str] = mapped_column(String(250))
+    description: Mapped[str | None] = mapped_column(String(1000))
+    icon: Mapped[str] = mapped_column(String(30))
+    category: Mapped[str] = mapped_column(String(30), index=True)
+    case_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), index=True)
+    task_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), index=True)
+    document_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), index=True)
+    data: Mapped[dict] = mapped_column(MutableDict.as_mutable(JSON), default=dict)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

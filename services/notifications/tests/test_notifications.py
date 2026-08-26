@@ -46,6 +46,7 @@ async def test_event_to_api_and_digest(notification_context) -> None:
     user_id, other_id, case_id = uuid4(), uuid4(), uuid4()
     broadcast = FakeBroadcaster()
     event = {
+        "event_id": str(uuid4()),
         "event_type": "task.completed",
         "case_id": str(case_id),
         "task_id": str(uuid4()),
@@ -97,6 +98,47 @@ async def test_event_to_api_and_digest(notification_context) -> None:
             )
         )
     assert digest_count == 1
+
+    activity = await client.get(
+        "/api/notifications/activity",
+        headers=headers(user_id),
+        params={"category": "submissions", "limit": 1},
+    )
+    assert activity.status_code == 200
+    assert activity.json()["activities"][0]["activity_type"] == "task_completed"
+    assert activity.json()["groups"][0]["activities"][0]["case_id"] == str(case_id)
+
+
+@pytest.mark.asyncio
+async def test_activity_audit_is_user_scoped_and_granular(notification_context) -> None:
+    client, sessions = notification_context
+    user_id, other_id, document_id = uuid4(), uuid4(), uuid4()
+    event = {
+        "event_id": str(uuid4()),
+        "event_type": "document.accessed",
+        "owner_user_id": str(user_id),
+        "document_id": str(document_id),
+        "document_title": "Income Certificate",
+        "action": "shared",
+        "recipient": "Pension Department",
+        "purpose": "Eligibility verification",
+        "data_fields_accessed": ["annual_income"],
+    }
+    async with sessions() as session:
+        await handle_event(session, FakeBroadcaster(), FakeAuthority([]), event)
+
+    own = await client.get(
+        "/api/notifications/audit-log",
+        headers=headers(user_id),
+        params={"category": "sharing", "document_id": str(document_id)},
+    )
+    assert own.status_code == 200
+    assert own.json()["entries"][0]["details"]["purpose"] == "Eligibility verification"
+    assert own.json()["entries"][0]["details"]["data_fields_accessed"] == [
+        "annual_income"
+    ]
+    hidden = await client.get("/api/notifications/activity", headers=headers(other_id))
+    assert hidden.json()["activities"] == []
 
 
 @pytest.mark.asyncio

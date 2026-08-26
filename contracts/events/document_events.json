@@ -9,6 +9,8 @@
     "owner_user_id": {"type": "string", "format": "uuid"},
     "case_id": {"type": ["string", "null"], "format": "uuid"},
     "document_type": {"type": "string"},
+    "title": {"type": "string"},
+    "extracted_fields": {"type": "object"},
     "timestamp": {"type": "string", "format": "date-time"}
   },
   "additionalProperties": true

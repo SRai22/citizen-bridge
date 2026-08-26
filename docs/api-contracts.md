@@ -163,6 +163,25 @@ Extended profile with completeness and provenance.
 }
 ```
 
+### `PATCH /api/auth/me/profile`
+
+Updates one profile field and records user-input provenance.
+
+```json
+{ "field_name": "annual_income", "value": 350000, "source": "user_input" }
+```
+
+### `GET /api/auth/me/profile/{field_name}/provenance`
+
+Returns the field's append-only source and verification history. A specific record can be
+confirmed or disputed with `PATCH /api/auth/me/profile/{field_name}/provenance/{id}` and a
+`{ "confirmed": true | false }` body.
+
+### `POST /api/auth/users/{user_id}/enrich`
+
+Internal service endpoint protected by `X-Internal-Service-Token`. Accepts a `fields` array with
+`name`, `value`, `source_type`, optional `source_reference`, and verification/validity metadata.
+
 ---
 
 ### `GET /api/auth/me/family`
@@ -735,6 +754,19 @@ When `status: "complete"`:
   "completions": []
 }
 ```
+
+### `GET /api/notifications/activity`
+
+**Query:** `?category=submissions&days=7&limit=50&offset=0`
+
+Returns a user-scoped chronological `activities` list, day-based `groups`, and `has_more`.
+
+### `GET /api/notifications/audit-log`
+
+**Query:** `?category=sharing&document_id=<uuid>&case_id=<uuid>&limit=50&offset=0`
+
+Returns the same user-scoped projection with granular event details including sharing purpose,
+recipient, and accessed fields.
 
 ---
 

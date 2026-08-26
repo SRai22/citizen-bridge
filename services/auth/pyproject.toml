@@ -13,6 +13,7 @@ dependencies = [
     "bcrypt>=4.2,<5",
     "fastapi>=0.116,<1",
     "grpcio>=1.74,<2",
+    "httpx>=0.28,<1",
     "opentelemetry-api>=1.36,<2",
     "opentelemetry-exporter-otlp-proto-grpc>=1.36,<2",
     "opentelemetry-instrumentation-fastapi>=0.57b0,<1",

@@ -1,3 +1,3 @@
-from .producer import EventPublisher
+from .producer import DomainEventConsumer, EventPublisher
 
-__all__ = ["EventPublisher"]
+__all__ = ["DomainEventConsumer", "EventPublisher"]

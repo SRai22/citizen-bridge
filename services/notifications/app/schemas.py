@@ -46,3 +46,19 @@ class PreferenceResponse(BaseModel):
     urgent_push: bool
     categories: dict
     updated_at: datetime
+
+
+class ActivityResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    activity_type: str
+    title: str
+    description: str | None
+    icon: str
+    category: str
+    case_id: UUID | None
+    task_id: UUID | None
+    document_id: UUID | None
+    data: dict
+    occurred_at: datetime

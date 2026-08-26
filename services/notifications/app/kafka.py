@@ -5,15 +5,21 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models import ProcessedEvent
 
-TOPICS = ("cases", "tasks", "documents", "users", "authority")
+TOPICS = ("cases", "tasks", "documents", "users", "authority", "benefits")
 EVENT_TYPES = (
+    "case.created",
+    "case.completed",
     "task.status_changed",
     "task.completed",
     "task.failed",
     "document.created",
+    "document.accessed",
     "document.expired",
     "authority.granted",
     "authority.revoked",
+    "user.profile_updated",
+    "user.logged_in",
+    "benefit.discovered",
 )
 
 

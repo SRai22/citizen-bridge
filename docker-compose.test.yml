@@ -75,6 +75,7 @@ services:
       GRPC_PORT: 50051
       DATABASE_URL: postgresql+asyncpg://auth_service:test-auth-password@postgres:5432/citizen_bridge
       JWT_SECRET: test-only-jwt-secret-with-at-least-32-characters
+      INTERNAL_SERVICE_TOKEN: test-only-internal-service-token
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       OTEL_ENABLED: "false"
     ports: ["18001:8001"]

@@ -6,6 +6,7 @@ from sqlalchemy import select
 from app.api import login_limiter, tokens
 from app.grpc.server import AuthServicer
 from app.models import User
+from app.profile import fields_from_event
 
 REGISTRATION = {
     "username": "asha",
@@ -100,6 +101,90 @@ async def test_phone_registration_can_resume_profile_completion(api_context) -> 
     assert completed.status_code == 200
     assert completed.json()["name"] == "Asha Rao"
     assert completed.json()["date_of_birth"] == "1990-04-12"
+
+
+@pytest.mark.asyncio
+async def test_progressive_profile_enrichment_and_provenance(api_context) -> None:
+    client, publisher, _ = api_context
+    registered = await client.post("/api/auth/register", json=REGISTRATION)
+    user_id = registered.json()["user_id"]
+    headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
+
+    profile = await client.get("/api/auth/me/profile", headers=headers)
+    assert profile.status_code == 200
+    assert profile.json()["completeness_percent"] == 40
+    assert "annual_income" in profile.json()["missing_fields"]
+    assert profile.json()["enrichment_suggestions"][0]["reason"].startswith("Required for")
+
+    updated = await client.patch(
+        "/api/auth/me/profile",
+        headers=headers,
+        json={"field_name": "annual_income", "value": 350000},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["profile"]["annual_income"] == 350000
+    assert updated.json()["completeness_percent"] == 50
+    assert publisher.events[-1]["changed_fields"] == ["annual_income"]
+
+    history = await client.get(
+        "/api/auth/me/profile/annual_income/provenance", headers=headers
+    )
+    assert history.status_code == 200
+    assert history.json()["history"][0]["source_type"] == "user_input"
+    assert history.json()["history"][0]["confirmed_by_user"] is True
+
+    unauthorized = await client.post(
+        f"/api/auth/users/{user_id}/enrich",
+        json={
+            "fields": [
+                {
+                    "name": "occupation",
+                    "value": "Teacher",
+                    "source_type": "document_extracted",
+                }
+            ]
+        },
+    )
+    assert unauthorized.status_code == 401
+    enriched = await client.post(
+        f"/api/auth/users/{user_id}/enrich",
+        headers={"X-Internal-Service-Token": "test-internal-token"},
+        json={
+            "fields": [
+                {
+                    "name": "occupation",
+                    "value": "Teacher",
+                    "source_type": "document_extracted",
+                    "source_reference": "Employment Certificate 2026",
+                    "verified": True,
+                }
+            ]
+        },
+    )
+    assert enriched.status_code == 200
+    history = await client.get("/api/auth/me/profile/occupation/provenance", headers=headers)
+    record = history.json()["history"][0]
+    assert record["source_reference"] == "Employment Certificate 2026"
+    assert record["confirmed_by_user"] is False
+
+    disputed = await client.patch(
+        f"/api/auth/me/profile/occupation/provenance/{record['id']}",
+        headers=headers,
+        json={"confirmed": False},
+    )
+    assert disputed.status_code == 200
+    assert disputed.json()["disputed_at"] is not None
+
+    parsed = fields_from_event(
+        {
+            "event_type": "document.verified",
+            "owner_user_id": user_id,
+            "document_type": "income_certificate",
+            "extracted_fields": {"income": 425000},
+        }
+    )
+    assert parsed is not None
+    assert parsed[1][0].name == "annual_income"
 
 
 @pytest.mark.asyncio

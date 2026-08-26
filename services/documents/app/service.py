@@ -58,6 +58,17 @@ async def create_document(
             case_id=str(document.source_case_id) if document.source_case_id else None,
         )
     )
+    if document.verification_status == "verified":
+        await publisher.publish(
+            _event(
+                "document.verified",
+                document_id=str(document.id),
+                owner_user_id=str(document.owner_user_id),
+                document_type=document.document_type,
+                title=document.title,
+                extracted_fields=document.extracted_fields,
+            )
+        )
     return document
 
 
@@ -85,6 +96,10 @@ async def record_access(
             action=access.action,
             purpose=access.purpose,
             recipient=access.recipient,
+            document_title=document.title,
+            case_id=str(access.case_id) if access.case_id else None,
+            task_id=str(access.task_id) if access.task_id else None,
+            data_fields_accessed=document.metadata_.get("data_fields_accessed", []),
         )
     )
     return access

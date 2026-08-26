@@ -71,6 +71,10 @@ async def test_mock_intake_persists_and_confirms_profile(ai_context) -> None:
         "ai.conversation_completed",
         "ai.profile_extracted",
     ]
+    assert events.events[-1]["profile_fields"] == {
+        "city": "Bengaluru",
+        "state": "Karnataka",
+    }
 
 
 @pytest.mark.asyncio

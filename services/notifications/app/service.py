@@ -1,12 +1,14 @@
+import json
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Protocol
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from sqlalchemy import distinct, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.clients import AuthorityClient
-from app.models import Notification, NotificationPreference
+from app.models import ActivityEntry, Notification, NotificationPreference
 from app.schemas import NotificationCreate, NotificationResponse, PreferencePatch
 
 
@@ -86,6 +88,7 @@ async def handle_event(
     event: dict,
     publisher: Publisher | None = None,
 ) -> list[Notification]:
+    await project_activity(session, authority, event)
     routed = await route_event(authority, event)
     return [
         await create_notification(
@@ -96,6 +99,148 @@ async def handle_event(
         )
         for user_id, draft in routed
     ]
+
+
+async def project_activity(
+    session: AsyncSession, authority: AuthorityClient, event: dict
+) -> list[ActivityEntry]:
+    event_type = str(event.get("event_type", ""))
+    draft = _activity_draft(event_type, event)
+    if draft is None:
+        return []
+    if event.get("user_id"):
+        users = [str(event["user_id"])]
+    elif event.get("owner_user_id"):
+        users = [str(event["owner_user_id"])]
+    elif event_type.startswith("authority.") and event.get("grantee_id"):
+        users = [str(event["grantee_id"])]
+    elif event.get("case_id"):
+        users = await authority.case_users(str(event["case_id"]))
+    else:
+        return []
+    created = [
+        ActivityEntry(
+            source_event_id=_source_event_id(event),
+            user_id=UUID(user_id),
+            data=event,
+            occurred_at=_occurred_at(event),
+            case_id=_uuid(event.get("case_id")),
+            task_id=_uuid(event.get("task_id")),
+            document_id=_uuid(event.get("document_id")),
+            **draft,
+        )
+        for user_id in dict.fromkeys(users)
+    ]
+    session.add_all(created)
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        return []
+    return created
+
+
+def _activity_draft(event_type: str, event: dict) -> dict | None:
+    title = str(event.get("title") or event.get("task_title") or "Task")
+    document = str(event.get("document_title") or event.get("title") or "Document")
+    case_title = str(event.get("case_title") or event.get("life_event_type") or "case")
+    status = str(event.get("new_status") or event.get("status") or "")
+    if event_type == "task.status_changed" and status == "submitted":
+        authority = event.get("authority")
+        return _activity(
+            "task_submitted",
+            f"{title} submitted" + (f" to {authority}" if authority else ""),
+            "submissions",
+            "check",
+        )
+    if event_type == "task.completed" or (
+        event_type == "task.status_changed" and status == "completed"
+    ):
+        return _activity("task_completed", f"{title} completed", "submissions", "check")
+    if event_type == "task.failed" or (
+        event_type == "task.status_changed" and status == "failed"
+    ):
+        return _activity(
+            "task_failed", f"{title} was not successful", "submissions", "alert"
+        )
+    if event_type == "case.created":
+        return _activity("case_created", f"Case created: {case_title}", "cases", "check")
+    if event_type == "case.completed":
+        return _activity(
+            "case_completed", f"All tasks completed for {case_title}", "cases", "check"
+        )
+    if event_type == "document.created":
+        return _activity(
+            "document_created", f"{document} added to your documents", "documents", "document"
+        )
+    if event_type == "document.accessed" and event.get("action") == "shared":
+        recipient = str(event.get("recipient") or "a recipient")
+        purpose = event.get("purpose")
+        return _activity(
+            "document_shared",
+            f"{document} shared with {recipient}",
+            "sharing",
+            "lock",
+            f"Purpose: {purpose}" if purpose else None,
+        )
+    if event_type == "benefit.discovered":
+        return _activity(
+            "benefit_discovered",
+            f"New benefit: {event.get('name') or 'Benefit'}",
+            "benefits",
+            "search",
+        )
+    if event_type == "user.profile_updated":
+        changed = event.get("changed_fields") or []
+        label = str(changed[0]).replace("_", " ").title() if len(changed) == 1 else "Profile"
+        return _activity("profile_updated", f"{label} updated", "profile", "check")
+    if event_type == "authority.granted":
+        return _activity("authority_granted", "Access granted", "security", "lock")
+    if event_type == "authority.revoked":
+        return _activity("authority_revoked", "Access revoked", "security", "lock")
+    if event_type == "user.logged_in":
+        if event.get("new_device") is False:
+            return None
+        return _activity(
+            "login_new_device",
+            "Login from new device",
+            "security",
+            "lock",
+            str(event.get("device_info")) if event.get("device_info") else None,
+        )
+    return None
+
+
+def _activity(
+    activity_type: str,
+    title: str,
+    category: str,
+    icon: str,
+    description: str | None = None,
+) -> dict:
+    return {
+        "activity_type": activity_type,
+        "title": title,
+        "description": description,
+        "category": category,
+        "icon": icon,
+    }
+
+
+def _occurred_at(event: dict) -> datetime:
+    value = str(event.get("timestamp") or datetime.now(UTC).isoformat()).replace("Z", "+00:00")
+    return datetime.fromisoformat(value)
+
+
+def _uuid(value: object) -> UUID | None:
+    return UUID(str(value)) if value else None
+
+
+def _source_event_id(event: dict) -> str:
+    return str(
+        event.get("event_id")
+        or uuid5(NAMESPACE_URL, json.dumps(event, sort_keys=True, default=str))
+    )
 
 
 async def route_event(authority: AuthorityClient, event: dict) -> list[tuple[str, dict]]:

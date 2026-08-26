@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
 
@@ -21,8 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.clients import AuthClient
 from app.db import get_session
 from app.db.session import session_factory
-from app.models import Notification
-from app.schemas import NotificationResponse, PreferencePatch, PreferenceResponse
+from app.models import ActivityEntry, Notification
+from app.schemas import ActivityResponse, NotificationResponse, PreferencePatch, PreferenceResponse
 from app.service import digest, mark_read, preference, update_preference, websocket_message
 from app.websocket import ConnectionManager
 
@@ -147,6 +148,81 @@ async def read_notification(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Notification not found")
     await mark_read(session, notification)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/api/notifications/activity")
+async def activity_feed(
+    user_id: UserDep,
+    session: SessionDep,
+    category: str | None = None,
+    days: Annotated[int, Query(ge=1, le=90)] = 90,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> dict:
+    filters = [
+        ActivityEntry.user_id == user_id,
+        ActivityEntry.occurred_at >= datetime.now(UTC) - timedelta(days=days),
+    ]
+    if category:
+        filters.append(ActivityEntry.category == category)
+    total = await session.scalar(
+        select(func.count()).select_from(ActivityEntry).where(*filters)
+    )
+    rows = (
+        await session.scalars(
+            select(ActivityEntry)
+            .where(*filters)
+            .order_by(ActivityEntry.occurred_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+    activities = [ActivityResponse.model_validate(row).model_dump() for row in rows]
+    groups: dict[str, list[dict]] = {}
+    for item in activities:
+        groups.setdefault(item["occurred_at"].date().isoformat(), []).append(item)
+    return {
+        "activities": activities,
+        "groups": [{"date": day, "activities": items} for day, items in groups.items()],
+        "has_more": offset + len(rows) < (total or 0),
+    }
+
+
+@router.get("/api/notifications/audit-log")
+async def audit_log(
+    user_id: UserDep,
+    session: SessionDep,
+    category: str | None = None,
+    document_id: UUID | None = None,
+    case_id: UUID | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> dict:
+    filters = [ActivityEntry.user_id == user_id]
+    if category:
+        filters.append(ActivityEntry.category == category)
+    if document_id:
+        filters.append(ActivityEntry.document_id == document_id)
+    if case_id:
+        filters.append(ActivityEntry.case_id == case_id)
+    rows = (
+        await session.scalars(
+            select(ActivityEntry)
+            .where(*filters)
+            .order_by(ActivityEntry.occurred_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+    return {
+        "entries": [
+            {
+                **ActivityResponse.model_validate(row).model_dump(exclude={"data"}),
+                "details": row.data,
+            }
+            for row in rows
+        ]
+    }
 
 
 @router.websocket("/ws")

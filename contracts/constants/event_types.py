@@ -30,6 +30,7 @@ EVENT_TYPES = frozenset(
         "authority.delegation_expired",
         "authority.delegation_revoked",
         "notification.created",
+        "benefit.discovered",
         "ai.conversation_started",
         "ai.conversation_completed",
         "ai.profile_extracted",

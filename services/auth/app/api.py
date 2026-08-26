@@ -1,23 +1,31 @@
 import asyncio
+import hmac
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
 from contracts.lib.observability import reset_user_id, set_user_id
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.clients import CatalogClient
 from app.config import settings
 from app.db import get_session
 from app.kafka import EventPublisher
-from app.models import RefreshToken, User
+from app.models import ProfileFieldProvenance, RefreshToken, User
+from app.profile import completeness, enrich_profile, missing_fields, profile_payload, suggestions
 from app.schemas import (
     AccessTokenResponse,
+    EnrichmentField,
+    EnrichmentRequest,
     LoginRequest,
+    ProfileFieldUpdate,
+    ProvenanceDecision,
+    ProvenanceResponse,
     RefreshRequest,
     RegistrationRequest,
     TokenResponse,
@@ -51,6 +59,13 @@ def get_publisher(request: Request) -> EventPublisher:
 
 
 PublisherDep = Annotated[EventPublisher, Depends(get_publisher)]
+
+
+def get_catalog(request: Request) -> CatalogClient:
+    return request.app.state.catalog_client
+
+
+CatalogDep = Annotated[CatalogClient, Depends(get_catalog)]
 
 
 async def current_user(session: SessionDep, credentials: CredentialsDep) -> AsyncIterator[User]:
@@ -101,6 +116,19 @@ async def register(
         await session.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "Username already registered") from exc
 
+    provided = payload.model_dump(
+        include={"name", "date_of_birth", "city", "state"}, exclude_none=True
+    )
+    if provided:
+        await enrich_profile(
+            session,
+            user,
+            [
+                EnrichmentField(name=name, value=value, source_type="user_input")
+                for name, value in provided.items()
+            ],
+        )
+
     access, refresh, expires_at = tokens.issue_pair(user.id, user.username)
     session.add(
         RefreshToken(
@@ -147,6 +175,12 @@ async def login(
 
     access, refresh, expires_at = tokens.issue_pair(user.id, user.username)
     device_info = _device_info(request)
+    known_device = await session.scalar(
+        select(RefreshToken.id).where(
+            RefreshToken.user_id == user.id,
+            RefreshToken.device_info == device_info,
+        )
+    )
     session.add(
         RefreshToken(
             user_id=user.id,
@@ -155,7 +189,14 @@ async def login(
             device_info=device_info,
         )
     )
-    await publisher.publish(_event("user.logged_in", user, device_info=device_info))
+    await publisher.publish(
+        _event(
+            "user.logged_in",
+            user,
+            device_info=device_info,
+            new_device=known_device is None,
+        )
+    )
     await session.commit()
     return TokenResponse(user_id=user.id, access_token=access, refresh_token=refresh)
 
@@ -220,8 +261,18 @@ async def update_me(
     publisher: PublisherDep,
 ) -> User:
     changes = payload.model_dump(exclude_unset=True)
-    for field, value in changes.items():
-        setattr(user, field, value)
+    profile_changes = {key: value for key, value in changes.items() if key != "phone"}
+    if profile_changes:
+        await enrich_profile(
+            session,
+            user,
+            [
+                EnrichmentField(name=name, value=value, source_type="user_input")
+                for name, value in profile_changes.items()
+            ],
+        )
+    if "phone" in changes:
+        user.phone = changes["phone"]
     if changes:
         await publisher.publish(
             _event("user.profile_updated", user, changed_fields=sorted(changes))
@@ -233,6 +284,113 @@ async def update_me(
             raise HTTPException(status.HTTP_409_CONFLICT, "Phone already registered") from exc
         await session.refresh(user)
     return user
+
+
+@router.get("/me/profile")
+async def get_profile(user: CurrentUserDep, catalog: CatalogDep) -> dict[str, Any]:
+    missing = missing_fields(user)
+    requirements = await catalog.benefit_requirements()
+    return {
+        "profile": profile_payload(user),
+        "completeness_percent": completeness(user),
+        "missing_fields": missing,
+        "enrichment_suggestions": suggestions(missing, requirements),
+    }
+
+
+@router.patch("/me/profile")
+async def patch_profile(
+    payload: ProfileFieldUpdate,
+    user: CurrentUserDep,
+    session: SessionDep,
+    publisher: PublisherDep,
+) -> dict[str, Any]:
+    try:
+        changed = await enrich_profile(
+            session,
+            user,
+            [
+                EnrichmentField(
+                    name=payload.field_name,
+                    value=payload.value,
+                    source_type=payload.source,
+                )
+            ],
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    await publisher.publish(_event("user.profile_updated", user, changed_fields=changed))
+    await session.commit()
+    await session.refresh(user)
+    return {"profile": profile_payload(user), "completeness_percent": completeness(user)}
+
+
+@router.get("/me/profile/{field_name}/provenance")
+async def provenance_history(
+    field_name: str, user: CurrentUserDep, session: SessionDep
+) -> dict[str, Any]:
+    rows = (
+        await session.scalars(
+            select(ProfileFieldProvenance)
+            .where(
+                ProfileFieldProvenance.user_id == user.id,
+                ProfileFieldProvenance.field_name == field_name,
+            )
+            .order_by(ProfileFieldProvenance.created_at.desc())
+        )
+    ).all()
+    return {
+        "history": [ProvenanceResponse.model_validate(row).model_dump() for row in rows]
+    }
+
+
+@router.patch("/me/profile/{field_name}/provenance/{provenance_id}")
+async def decide_provenance(
+    field_name: str,
+    provenance_id: UUID,
+    payload: ProvenanceDecision,
+    user: CurrentUserDep,
+    session: SessionDep,
+) -> ProvenanceResponse:
+    record = await session.scalar(
+        select(ProfileFieldProvenance).where(
+            ProfileFieldProvenance.id == provenance_id,
+            ProfileFieldProvenance.user_id == user.id,
+            ProfileFieldProvenance.field_name == field_name,
+        )
+    )
+    if record is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Profile provenance not found")
+    now = datetime.now(UTC)
+    record.confirmed_by_user = payload.confirmed
+    record.confirmed_at = now if payload.confirmed else None
+    record.disputed_at = None if payload.confirmed else now
+    await session.commit()
+    await session.refresh(record)
+    return ProvenanceResponse.model_validate(record)
+
+
+@router.post("/users/{user_id}/enrich")
+async def internal_enrich(
+    user_id: UUID,
+    payload: EnrichmentRequest,
+    session: SessionDep,
+    publisher: PublisherDep,
+    internal_token: Annotated[str | None, Header(alias="X-Internal-Service-Token")] = None,
+) -> dict[str, Any]:
+    expected = settings.internal_service_token.get_secret_value()
+    if not expected or not internal_token or not hmac.compare_digest(internal_token, expected):
+        raise _unauthorized("Invalid internal service token")
+    user = await session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    try:
+        changed = await enrich_profile(session, user, payload.fields)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    await publisher.publish(_event("user.profile_updated", user, changed_fields=changed))
+    await session.commit()
+    return {"profile": profile_payload(user), "completeness_percent": completeness(user)}
 
 
 def _unauthorized(detail: str) -> HTTPException:

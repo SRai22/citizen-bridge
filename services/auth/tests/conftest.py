@@ -8,8 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
 os.environ.setdefault("JWT_SECRET", "test-only-secret-with-at-least-32-characters")
 os.environ.setdefault("OTEL_ENABLED", "false")
+os.environ.setdefault("INTERNAL_SERVICE_TOKEN", "test-internal-token")
 
-from app.api import get_publisher
+from app.api import get_catalog, get_publisher
 from app.db.base import Base
 from app.db.session import get_session
 from app.main import app
@@ -21,6 +22,11 @@ class FakePublisher:
 
     async def publish(self, event: dict[str, object]) -> None:
         self.events.append(event)
+
+
+class FakeCatalog:
+    async def benefit_requirements(self) -> dict[str, int]:
+        return {"annual_income": 3, "date_of_birth": 4}
 
 
 @pytest_asyncio.fixture
@@ -40,6 +46,7 @@ async def api_context() -> AsyncIterator[tuple[AsyncClient, FakePublisher, async
     publisher = FakePublisher()
     app.dependency_overrides[get_session] = override_session
     app.dependency_overrides[get_publisher] = lambda: publisher
+    app.dependency_overrides[get_catalog] = lambda: FakeCatalog()
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             yield client, publisher, sessions

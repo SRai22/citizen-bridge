@@ -33,6 +33,7 @@ async def test_catalog_http_api(client) -> None:
         "death_certificate",
         "birth_certificate",
     }
+    assert all("required_profile_fields" in item for item in filtered.json()["services"])
 
     searched = await client.get("/api/catalog/search", params={"q": "electricity"})
     assert len(searched.json()["services"]) == 2

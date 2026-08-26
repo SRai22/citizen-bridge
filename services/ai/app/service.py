@@ -148,6 +148,10 @@ async def confirm_intake(
                 "state": profile.location.state,
                 "household_members": len(profile.surviving_members) + 1,
             },
+            "profile_fields": {
+                "city": profile.location.city,
+                "state": profile.location.state,
+            },
         }
     )
     return profile
