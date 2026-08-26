@@ -1,5 +1,6 @@
 import type {
   AccessLogEntry,
+  ActivityFeedResponse,
   ActiveBenefit,
   ApprovalRequest,
   BenefitOpportunity,
@@ -9,8 +10,10 @@ import type {
   CatalogService,
   CitizenCase,
   DigestResponse,
+  DeletionStatus,
   DocDetailEntry,
   DocEntry,
+  DocumentShare,
   DocumentRequirement,
   ExternalApplication,
   FamilyMember,
@@ -22,6 +25,7 @@ import type {
   RejectionInterpretation,
   RemediationAction,
   TaskDetail,
+  WithdrawableApplication,
 } from "@/types/api";
 
 export class ApiError extends Error {
@@ -431,4 +435,59 @@ export function getNotifications(opts?: {
 export function getDigest(week?: string): Promise<DigestResponse> {
   const qs = week ? `?week=${encodeURIComponent(week)}` : "";
   return request(`/api/notifications/digest${qs}`);
+}
+
+export function getActivity(options: {
+  category?: string;
+  days?: number;
+  limit?: number;
+  offset?: number;
+  signal?: AbortSignal;
+} = {}): Promise<ActivityFeedResponse> {
+  const { signal, ...query } = options;
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined) search.set(key, String(value));
+  }
+  return request(`/api/notifications/activity?${search}`, { signal });
+}
+
+export function requestDataExport(): Promise<{ export_id: string; status: string }> {
+  return request("/api/auth/me/export", { method: "POST" });
+}
+
+export function getDataExport(exportId: string): Promise<{ status: string; download_url?: string; detail?: string }> {
+  return request(`/api/auth/me/export/${encodeURIComponent(exportId)}`);
+}
+
+export function getDocumentShares(): Promise<{ active_shares: DocumentShare[] }> {
+  return request("/api/docs/shares");
+}
+
+export function revokeDocumentShare(shareId: string): Promise<{ revoked: boolean; note: string }> {
+  return request(`/api/docs/shares/${encodeURIComponent(shareId)}/revoke`, { method: "POST" });
+}
+
+export function getWithdrawableApplications(): Promise<{ withdrawable: WithdrawableApplication[] }> {
+  return request("/api/cases/withdrawable");
+}
+
+export function withdrawApplication(caseId: string, taskId: string): Promise<{ withdrawn: boolean; note: string }> {
+  return request(`/api/cases/${encodeURIComponent(caseId)}/tasks/${encodeURIComponent(taskId)}/withdraw`, { method: "POST" });
+}
+
+export function getDeletionStatus(): Promise<DeletionStatus> {
+  return request("/api/auth/me/delete/status");
+}
+
+export function requestAccountDeletion(password: string): Promise<DeletionStatus> {
+  return request("/api/auth/me/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirmation: "DELETE MY ACCOUNT", password }),
+  });
+}
+
+export function cancelAccountDeletion(): Promise<{ cancelled: boolean; account_active: boolean }> {
+  return request("/api/auth/me/delete/cancel", { method: "POST" });
 }

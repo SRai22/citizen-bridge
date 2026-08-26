@@ -16,13 +16,13 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from starlette.responses import JSONResponse, Response
 
-from app.api import router
+from app.api import internal_router, router
 from app.auth_client import AuthClient
 from app.config import settings
 from app.db.session import engine, session_factory
 from app.grpc import create_server
-from app.kafka import EventPublisher, TaskConsumer
-from app.service import consume_task_completed, expire_documents
+from app.kafka import EventPublisher, TaskConsumer, UserDeletionConsumer
+from app.service import consume_task_completed, delete_user_data, expire_documents
 
 started_at = datetime.now(UTC)
 logger = configure_logging(settings.service_name)
@@ -48,13 +48,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         async with session_factory() as session:
             await consume_task_completed(session, publisher, event)
 
-    consumer = TaskConsumer(
-        settings.kafka_bootstrap_servers, session_factory, task_completed
+    consumer = TaskConsumer(settings.kafka_bootstrap_servers, session_factory, task_completed)
+
+    async def user_deleted(event: dict) -> None:
+        async with session_factory() as session:
+            await delete_user_data(session, event)
+
+    deletion_consumer = UserDeletionConsumer(
+        settings.kafka_bootstrap_servers, session_factory, user_deleted
     )
     await publisher.start()
     grpc_server = create_server(settings.grpc_port, session_factory, publisher)
     await grpc_server.start()
     await consumer.start()
+    await deletion_consumer.start()
     expiration_task = asyncio.create_task(expiration_loop(publisher), name="document-expiration")
     app.state.publisher = publisher
     app.state.auth_client = auth
@@ -76,6 +83,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         except asyncio.CancelledError:
             pass
         await consumer.stop()
+        await deletion_consumer.stop()
         await grpc_server.stop(grace=5)
         await publisher.stop()
         await auth.close()
@@ -85,6 +93,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Citizen Bridge Documents", version=settings.service_version, lifespan=lifespan)
 app.state.health_checks = {"database": check_database}
 app.include_router(router)
+app.include_router(internal_router)
 app.middleware("http")(http_metrics_middleware)
 app.middleware("http")(correlation_middleware)
 setup_tracing(

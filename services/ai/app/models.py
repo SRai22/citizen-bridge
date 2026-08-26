@@ -36,9 +36,7 @@ class Conversation(Base):
     messages: Mapped[list[dict[str, Any]]] = mapped_column(
         MutableList.as_mutable(JSON), default=list
     )
-    extracted_profile: Mapped[dict[str, Any] | None] = mapped_column(
-        MutableDict.as_mutable(JSON)
-    )
+    extracted_profile: Mapped[dict[str, Any] | None] = mapped_column(MutableDict.as_mutable(JSON))
     model_used: Mapped[str] = mapped_column(String(100))
     total_tokens_used: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
@@ -66,3 +64,12 @@ class AIRequestLog(Base):
     cost_estimate: Mapped[float] = mapped_column(Float, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     conversation: Mapped[Conversation | None] = relationship(back_populates="request_logs")
+
+
+class ProcessedEvent(Base):
+    __tablename__ = "processed_events"
+    __table_args__ = ({"schema": "ai"},)
+
+    event_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    consumer_group: Mapped[str] = mapped_column(String(100))

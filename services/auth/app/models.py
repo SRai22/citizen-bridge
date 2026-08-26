@@ -2,6 +2,7 @@ from datetime import UTC, date, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     Date,
@@ -13,7 +14,8 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship as orm_relationship
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import relationship as orm_relationship
 
 from app.db.base import Base
 
@@ -52,6 +54,47 @@ class User(Base):
     family_members: Mapped[list["FamilyMember"]] = orm_relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    exports: Mapped[list["DataExport"]] = orm_relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    deletion_requests: Mapped[list["AccountDeletion"]] = orm_relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class DataExport(Base):
+    __tablename__ = "data_exports"
+    __table_args__ = ({"schema": "auth"},)
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("auth.users.id", ondelete="CASCADE"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(20), default="processing", index=True)
+    payload: Mapped[dict | None] = mapped_column(JSON)
+    error: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    user: Mapped[User] = orm_relationship(back_populates="exports")
+
+
+class AccountDeletion(Base):
+    __tablename__ = "account_deletions"
+    __table_args__ = ({"schema": "auth"},)
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("auth.users.id", ondelete="CASCADE"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(20), default="cooling_off", index=True)
+    cooling_off_until: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    user: Mapped[User] = orm_relationship(back_populates="deletion_requests")
 
 
 class FamilyMember(Base):

@@ -208,8 +208,7 @@ async def list_case_access(
         )
     ).all()
     result = {
-        access.user_id: (access.role, grant.granted_at, grant.grantor_id)
-        for access, grant in rows
+        access.user_id: (access.role, grant.granted_at, grant.grantor_id) for access, grant in rows
     }
     delegations = (
         await session.scalars(
@@ -226,9 +225,7 @@ async def list_case_access(
     ).all()
     for delegation in delegations:
         if (
-            await _direct_access(
-                session, delegation.delegator_id, "case", case_id, DELEGATE, now
-            )
+            await _direct_access(session, delegation.delegator_id, "case", case_id, DELEGATE, now)
         ).allowed:
             result[delegation.delegate_id] = (
                 delegation.role,
@@ -358,12 +355,14 @@ async def assign_case_coordinator(
     relationship: str | None = None,
 ) -> AuthorityGrant:
     grant = await session.scalar(
-        select(AuthorityGrant).where(
+        select(AuthorityGrant)
+        .where(
             AuthorityGrant.grantee_id == user_id,
             AuthorityGrant.resource_type == "case",
             AuthorityGrant.resource_id == case_id,
             AuthorityGrant.revoked_at.is_(None),
-        ).options(selectinload(AuthorityGrant.case_access))
+        )
+        .options(selectinload(AuthorityGrant.case_access))
     )
     if grant is None:
         grant = await create_grant(
@@ -482,9 +481,7 @@ async def request_delegation(
 ) -> DelegationApprovalRequest:
     if from_user_id == to_user_id:
         raise ValueError("Cannot delegate authority to yourself")
-    if not (
-        await check_access(session, from_user_id, "case", scope_id, DELEGATE)
-    ).allowed:
+    if not (await check_access(session, from_user_id, "case", scope_id, DELEGATE)).allowed:
         raise PermissionError("Delegation permission required")
     existing = await session.scalar(
         select(DelegationApprovalRequest).where(
@@ -660,3 +657,26 @@ def _event(event_type: str, **fields: Any) -> dict[str, Any]:
         "timestamp": datetime.now(UTC).isoformat(),
         **fields,
     }
+
+
+async def delete_user_data(session: AsyncSession, event: dict[str, Any]) -> None:
+    user_id = UUID(str(event["user_id"]))
+    await session.execute(
+        delete(DelegationApprovalRequest).where(
+            or_(
+                DelegationApprovalRequest.from_user_id == user_id,
+                DelegationApprovalRequest.to_user_id == user_id,
+            )
+        )
+    )
+    await session.execute(
+        delete(Delegation).where(
+            or_(Delegation.delegator_id == user_id, Delegation.delegate_id == user_id)
+        )
+    )
+    await session.execute(
+        delete(AuthorityGrant).where(
+            or_(AuthorityGrant.grantor_id == user_id, AuthorityGrant.grantee_id == user_id)
+        )
+    )
+    await session.commit()

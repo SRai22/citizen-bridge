@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -13,16 +14,16 @@ from contracts.lib.observability import (
     setup_tracing,
 )
 from fastapi import FastAPI
-from sqlalchemy import text
+from sqlalchemy import select, text
 from starlette.responses import JSONResponse, Response
 
 from app.api import router, tokens
-from app.clients import CatalogClient
+from app.clients import CatalogClient, DataServicesClient
 from app.config import settings
 from app.db.session import engine, session_factory
 from app.grpc import create_server
 from app.kafka import DomainEventConsumer, EventPublisher
-from app.models import User
+from app.models import AccountDeletion, User
 from app.profile import enrich_profile, fields_from_event
 
 started_at = datetime.now(UTC)
@@ -34,10 +35,46 @@ async def check_database() -> None:
         await connection.execute(text("SELECT 1"))
 
 
+async def deletion_loop(publisher: EventPublisher) -> None:
+    while True:
+        await asyncio.sleep(settings.deletion_check_seconds)
+        async with session_factory() as session:
+            due = (
+                await session.scalars(
+                    select(AccountDeletion).where(
+                        AccountDeletion.status == "cooling_off",
+                        AccountDeletion.cooling_off_until <= datetime.now(UTC),
+                    )
+                )
+            ).all()
+            for deletion in due:
+                user = await session.get(User, deletion.user_id)
+                if user is None:
+                    continue
+                await publisher.publish(
+                    {
+                        "event_type": "user.deleted",
+                        "user_id": str(user.id),
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    }
+                )
+                await session.delete(user)
+            await session.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     publisher = EventPublisher(settings.kafka_bootstrap_servers)
     catalog = CatalogClient(settings.catalog_http_url)
+    data_services = DataServicesClient(
+        {
+            "authority": settings.authority_http_url,
+            "cases": settings.case_engine_http_url,
+            "documents": settings.documents_http_url,
+            "notifications": settings.notifications_http_url,
+        },
+        settings.internal_service_token.get_secret_value(),
+    )
 
     async def consume(event: dict) -> None:
         parsed = fields_from_event(event)
@@ -59,15 +96,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             )
             await session.commit()
 
-    consumer = DomainEventConsumer(
-        settings.kafka_bootstrap_servers, session_factory, consume
-    )
+    consumer = DomainEventConsumer(settings.kafka_bootstrap_servers, session_factory, consume)
     grpc_server = create_server(settings.grpc_port, session_factory, tokens)
     await publisher.start()
     await grpc_server.start()
     await consumer.start()
+    deletion_task = asyncio.create_task(deletion_loop(publisher), name="account-deletion")
     app.state.publisher = publisher
     app.state.catalog_client = catalog
+    app.state.data_services = data_services
+    app.state.session_factory = session_factory
     app.state.health_checks = {"database": check_database, "kafka": consumer.check}
     logger.info(
         "service.started",
@@ -76,10 +114,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        deletion_task.cancel()
+        try:
+            await deletion_task
+        except asyncio.CancelledError:
+            pass
         await consumer.stop()
         await grpc_server.stop(grace=5)
         await publisher.stop()
         await catalog.close()
+        await data_services.close()
         await engine.dispose()
 
 

@@ -30,3 +30,20 @@ class TaskConsumer(EventConsumer):
             ProcessedEvent,
         )
         self.on("task.completed", handler)
+
+
+class UserDeletionConsumer(EventConsumer):
+    def __init__(
+        self,
+        bootstrap_servers: str,
+        sessions: async_sessionmaker[AsyncSession],
+        handler: Callable[[dict[str, Any]], Awaitable[None]],
+    ) -> None:
+        super().__init__(
+            bootstrap_servers,
+            "documents-user-deletion-v1",
+            ("users",),
+            sessions,
+            ProcessedEvent,
+        )
+        self.on("user.deleted", handler)

@@ -97,6 +97,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       AUTH_GRPC_HOST: auth:50051
       EXPIRATION_CHECK_SECONDS: 1
+      INTERNAL_SERVICE_TOKEN: test-only-internal-service-token
       OTEL_ENABLED: "false"
     ports: ["18002:8002"]
     depends_on:
@@ -147,6 +148,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       AUTH_GRPC_HOST: auth:50051
       EXPIRATION_CHECK_SECONDS: 1
+      INTERNAL_SERVICE_TOKEN: test-only-internal-service-token
       OTEL_ENABLED: "false"
     ports: ["18004:8004"]
     depends_on:
@@ -167,6 +169,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       AUTH_GRPC_HOST: auth:50051
       AUTHORITY_GRPC_HOST: authority:50052
+      INTERNAL_SERVICE_TOKEN: test-only-internal-service-token
       OTEL_ENABLED: "false"
     ports: ["18005:8005"]
     depends_on:

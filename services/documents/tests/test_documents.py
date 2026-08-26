@@ -47,10 +47,17 @@ async def test_document_lifecycle(document_context) -> None:
         json={"action": "shared", "purpose": "Pension application", "recipient": "Treasury"},
     )
     assert accessed.status_code == 201
-    access_log = await client.get(
-        f"/api/docs/{document_id}/access-log", headers=headers(user_id)
-    )
+    access_log = await client.get(f"/api/docs/{document_id}/access-log", headers=headers(user_id))
     assert len(access_log.json()["accesses"]) == 2
+    shares = await client.get("/api/docs/shares", headers=headers(user_id))
+    assert shares.json()["active_shares"][0]["shared_with"] == "Treasury"
+    revoked = await client.post(
+        f"/api/docs/shares/{accessed.json()['id']}/revoke", headers=headers(user_id)
+    )
+    assert revoked.json()["revoked"] is True
+    assert (await client.get("/api/docs/shares", headers=headers(user_id))).json() == {
+        "active_shares": []
+    }
 
     missing = await client.post(
         "/api/docs/check-requirements",

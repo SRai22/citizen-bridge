@@ -16,13 +16,13 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from starlette.responses import JSONResponse, Response
 
-from app.api import router
+from app.api import internal_router, router
 from app.auth_client import AuthClient
 from app.config import settings
 from app.db.session import engine, session_factory
 from app.grpc import create_server
 from app.kafka import EventPublisher, UserEventConsumer
-from app.service import create_grant, expire_authority
+from app.service import create_grant, delete_user_data, expire_authority
 
 started_at = datetime.now(UTC)
 logger = configure_logging(settings.service_name)
@@ -51,8 +51,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         async with session_factory() as session:
             await create_grant(session, publisher, None, user_id, "person", user_id, "owner")
 
+    async def delete_user(event: dict[str, object]) -> None:
+        async with session_factory() as session:
+            await delete_user_data(session, event)
+
     consumer = UserEventConsumer(
-        settings.kafka_bootstrap_servers, session_factory, register_user
+        settings.kafka_bootstrap_servers, session_factory, register_user, delete_user
     )
     await publisher.start()
     grpc_server = create_server(settings.grpc_port, session_factory, publisher)
@@ -92,6 +96,7 @@ app = FastAPI(
 )
 app.state.health_checks = {"database": check_database}
 app.include_router(router)
+app.include_router(internal_router)
 app.middleware("http")(http_metrics_middleware)
 app.middleware("http")(correlation_middleware)
 setup_tracing(

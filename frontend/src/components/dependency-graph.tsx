@@ -36,6 +36,7 @@ const STATUS_COLORS: Record<TaskStatus, { bg: string; border: string; text: stri
   completed: { bg: "#ecfdf5", border: "#34d399", text: "#065f46" },
   failed: { bg: "#fff1f2", border: "#fb7185", text: "#9f1239" },
   blocked: { bg: "#fff1f2", border: "#fda4af", text: "#9f1239" },
+  cancelled: { bg: "#f8fafc", border: "#cbd5e1", text: "#475569" },
 };
 
 const STATUS_ICONS: Record<TaskStatus, string> = {
@@ -47,6 +48,7 @@ const STATUS_ICONS: Record<TaskStatus, string> = {
   completed: "✅",
   failed: "🔴",
   blocked: "🔴",
+  cancelled: "—",
 };
 
 // -- Custom node component -----------------------------------------------------

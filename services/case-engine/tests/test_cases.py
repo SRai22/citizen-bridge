@@ -95,9 +95,7 @@ async def test_authenticated_case_flow(case_context) -> None:
         await session.commit()
         assert await mark_overdue_tasks(session) == 1
 
-    overdue = await client.get(
-        f"/api/cases/{case_id}/tasks/{task_id}", headers=headers(user_id)
-    )
+    overdue = await client.get(f"/api/cases/{case_id}/tasks/{task_id}", headers=headers(user_id))
     assert overdue.json()["wait_state"]["is_overdue"] is True
 
     completed = await client.post(
@@ -152,9 +150,9 @@ async def test_failed_task_uses_ai_rejection_interpretation(case_context) -> Non
         },
     )
     assert failed.status_code == 200
-    assert events.events[-1][1]["output_data"]["rejection_interpretation"][
-        "remediation_steps"
-    ] == ["add_task:legal_heir_certificate:bescom_transfer"]
+    assert events.events[-1][1]["output_data"]["rejection_interpretation"]["remediation_steps"] == [
+        "add_task:legal_heir_certificate:bescom_transfer"
+    ]
 
 
 @pytest.mark.asyncio
@@ -192,6 +190,17 @@ async def test_task_review_creates_approval_and_submission_receipt(case_context)
     case = await client.get(f"/api/cases/{case_id}", headers=headers(user_id))
     assert case.json()["tasks_by_group"]["waiting"][0]["task_id"] == task_id
 
+    withdrawable = await client.get("/api/cases/withdrawable", headers=headers(user_id))
+    assert withdrawable.json()["withdrawable"][0]["can_withdraw"] is True
+    withdrawn = await client.post(
+        f"/api/cases/{case_id}/tasks/{task_id}/withdraw", headers=headers(user_id)
+    )
+    assert withdrawn.json()["task_status"] == "cancelled"
+    repeated = await client.post(
+        f"/api/cases/{case_id}/tasks/{task_id}/withdraw", headers=headers(user_id)
+    )
+    assert repeated.status_code == 409
+
 
 @pytest.mark.asyncio
 async def test_case_can_be_created_for_a_family_member(case_context) -> None:
@@ -202,9 +211,7 @@ async def test_case_can_be_created_for_a_family_member(case_context) -> None:
     case_payload["subject_person_index"] = 0
     case_payload["subject_relationship"] = "father"
 
-    created = await client.post(
-        "/api/cases", headers=headers(user_id), json=case_payload
-    )
+    created = await client.post("/api/cases", headers=headers(user_id), json=case_payload)
     assert created.status_code == 201, created.text
     assert created.json()["my_role"] == "coordinator"
     assert created.json()["subject"]["name"] == "Rajesh Kumar"
@@ -214,9 +221,7 @@ async def test_case_can_be_created_for_a_family_member(case_context) -> None:
     assert context.status_code == 200
     family = next(option for option in context.json()["options"] if option["type"] == "family")
     assert family["members"][0]["relationship"] == "father"
-    assert any(
-        event[1]["event_type"] == "case.created" for event in events.events
-    )
+    assert any(event[1]["event_type"] == "case.created" for event in events.events)
 
     case_id = created.json()["case_id"]
     task_id = created.json()["tasks_by_group"]["ready"][0]["task_id"]

@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -54,6 +54,7 @@ VALID_TRANSITIONS = {
     TaskStatus.COMPLETED: set(),
     TaskStatus.FAILED: {TaskStatus.READY, TaskStatus.BLOCKED},
     TaskStatus.BLOCKED: {TaskStatus.READY},
+    TaskStatus.CANCELLED: set(),
 }
 
 
@@ -81,6 +82,7 @@ async def create_case(
         title=f"{event.type.replace('_', ' ').title()} — Administrative Formalities",
         status=CaseStatus.ACTIVE,
         life_event_type=event.type,
+        owner_user_id=user_id,
         profile=event.context,
         life_event=LifeEvent(
             event_type=event.type,
@@ -415,7 +417,7 @@ def case_detail(case: Case, access: AccessContext) -> CaseDetail:
             wait_state=wait_state,
             wait_summary=_wait_summary(wait_state),
         )
-        if task.status == TaskStatus.COMPLETED:
+        if task.status in {TaskStatus.COMPLETED, TaskStatus.CANCELLED}:
             groups.completed.append(response)
         elif task.status in {TaskStatus.SUBMITTED, TaskStatus.AWAITING_APPROVAL}:
             groups.waiting.append(response)
@@ -509,3 +511,10 @@ def _wait_summary(wait: WaitState | None) -> str | None:
 
 def _event(event_type: str, **fields: Any) -> dict[str, Any]:
     return {"event_type": event_type, "timestamp": datetime.now(UTC).isoformat(), **fields}
+
+
+async def delete_user_data(session: AsyncSession, event: dict[str, Any]) -> None:
+    user_id = UUID(str(event["user_id"]))
+    await session.execute(delete(ActiveBenefit).where(ActiveBenefit.user_id == user_id))
+    await session.execute(delete(Case).where(Case.owner_user_id == user_id))
+    await session.commit()

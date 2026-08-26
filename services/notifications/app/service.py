@@ -3,7 +3,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Protocol
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from sqlalchemy import distinct, select
+from sqlalchemy import delete, distinct, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -18,6 +18,15 @@ class Broadcaster(Protocol):
 
 class Publisher(Protocol):
     async def publish(self, event: dict) -> None: ...
+
+
+async def delete_user_data(session: AsyncSession, user_id: UUID) -> None:
+    await session.execute(delete(ActivityEntry).where(ActivityEntry.user_id == user_id))
+    await session.execute(delete(Notification).where(Notification.user_id == user_id))
+    await session.execute(
+        delete(NotificationPreference).where(NotificationPreference.user_id == user_id)
+    )
+    await session.commit()
 
 
 async def preference(session: AsyncSession, user_id: UUID) -> NotificationPreference:
@@ -157,12 +166,8 @@ def _activity_draft(event_type: str, event: dict) -> dict | None:
         event_type == "task.status_changed" and status == "completed"
     ):
         return _activity("task_completed", f"{title} completed", "submissions", "check")
-    if event_type == "task.failed" or (
-        event_type == "task.status_changed" and status == "failed"
-    ):
-        return _activity(
-            "task_failed", f"{title} was not successful", "submissions", "alert"
-        )
+    if event_type == "task.failed" or (event_type == "task.status_changed" and status == "failed"):
+        return _activity("task_failed", f"{title} was not successful", "submissions", "alert")
     if event_type == "case.created":
         return _activity("case_created", f"Case created: {case_title}", "cases", "check")
     if event_type == "case.completed":
@@ -384,8 +389,7 @@ async def digest(session: AsyncSession, user_id: UUID, week: str | None = None) 
         )
     ).all()
     groups = {
-        key: []
-        for key in ("ready_actions", "new_opportunities", "status_updates", "completions")
+        key: [] for key in ("ready_actions", "new_opportunities", "status_updates", "completions")
     }
     for item in rows:
         if item.notification_type == "benefit_discovered":
@@ -410,9 +414,7 @@ async def generate_weekly_digests(
     publisher: Publisher | None = None,
 ) -> None:
     async with sessions() as session:
-        user_ids = (
-            await session.scalars(select(distinct(Notification.user_id)))
-        ).all()
+        user_ids = (await session.scalars(select(distinct(Notification.user_id)))).all()
         for user_id in user_ids:
             settings = await preference(session, user_id)
             if not settings.digest_enabled or run_day and settings.digest_day != run_day:

@@ -126,9 +126,7 @@ async def test_progressive_profile_enrichment_and_provenance(api_context) -> Non
     assert updated.json()["completeness_percent"] == 50
     assert publisher.events[-1]["changed_fields"] == ["annual_income"]
 
-    history = await client.get(
-        "/api/auth/me/profile/annual_income/provenance", headers=headers
-    )
+    history = await client.get("/api/auth/me/profile/annual_income/provenance", headers=headers)
     assert history.status_code == 200
     assert history.json()["history"][0]["source_type"] == "user_input"
     assert history.json()["history"][0]["confirmed_by_user"] is True
@@ -226,10 +224,46 @@ async def test_family_member_lifecycle_is_user_scoped(api_context) -> None:
         json={"date_of_birth": "1960-02-03"},
     )
     assert updated.json()["date_of_birth"] == "1960-02-03"
-    assert (await client.delete(f"/api/auth/me/family/{member_id}", headers=headers)).status_code == (
-        204
-    )
+    assert (
+        await client.delete(f"/api/auth/me/family/{member_id}", headers=headers)
+    ).status_code == (204)
     assert (await client.get("/api/auth/me/family", headers=headers)).json() == []
+
+
+@pytest.mark.asyncio
+async def test_data_export_and_deletion_cooling_off(api_context) -> None:
+    client, publisher, _ = api_context
+    registered = await client.post("/api/auth/register", json=REGISTRATION)
+    headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
+
+    created = await client.post("/api/auth/me/export", headers=headers)
+    assert created.status_code == 202
+    export_id = created.json()["export_id"]
+    status_response = await client.get(f"/api/auth/me/export/{export_id}", headers=headers)
+    assert status_response.json()["status"] == "ready"
+    downloaded = await client.get(f"/api/auth/me/export/{export_id}/download", headers=headers)
+    assert downloaded.json()["profile"]["username"] == "asha"
+
+    invalid = await client.post(
+        "/api/auth/me/delete",
+        headers=headers,
+        json={"confirmation": "DELETE MY ACCOUNT", "password": "wrong-pass"},
+    )
+    assert invalid.status_code == 401
+    scheduled = await client.post(
+        "/api/auth/me/delete",
+        headers=headers,
+        json={
+            "confirmation": "DELETE MY ACCOUNT",
+            "password": REGISTRATION["password"],
+        },
+    )
+    assert scheduled.json()["status"] == "cooling_off"
+    assert publisher.events[-1]["event_type"] == "user.deletion_scheduled"
+    assert (await client.post("/api/auth/me/delete/cancel", headers=headers)).json() == {
+        "cancelled": True,
+        "account_active": True,
+    }
 
 
 class AbortContext:

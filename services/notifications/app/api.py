@@ -1,3 +1,4 @@
+import hmac
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
@@ -7,6 +8,7 @@ from contracts.lib.observability import reset_user_id, set_user_id
 from fastapi import (
     APIRouter,
     Depends,
+    Header,
     HTTPException,
     Query,
     Request,
@@ -20,6 +22,7 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clients import AuthClient
+from app.config import settings
 from app.db import get_session
 from app.db.session import session_factory
 from app.models import ActivityEntry, Notification
@@ -28,6 +31,7 @@ from app.service import digest, mark_read, preference, update_preference, websoc
 from app.websocket import ConnectionManager
 
 router = APIRouter(tags=["notifications"])
+internal_router = APIRouter(prefix="/internal", include_in_schema=False)
 bearer = HTTPBearer(auto_error=False)
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 CredentialsDep = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]
@@ -92,9 +96,9 @@ async def notifications(
         )
     ).all()
     unread = await session.scalar(
-        select(func.count()).select_from(Notification).where(
-            Notification.user_id == user_id, Notification.read.is_(False)
-        )
+        select(func.count())
+        .select_from(Notification)
+        .where(Notification.user_id == user_id, Notification.read.is_(False))
     )
     return {
         "notifications": [NotificationResponse.model_validate(item).model_dump() for item in rows],
@@ -114,9 +118,7 @@ async def read_all(user_id: UserDep, session: SessionDep) -> Response:
 
 
 @router.get("/api/notifications/digest")
-async def weekly_digest(
-    user_id: UserDep, session: SessionDep, week: str | None = None
-) -> dict:
+async def weekly_digest(user_id: UserDep, session: SessionDep, week: str | None = None) -> dict:
     try:
         return await digest(session, user_id, week)
     except ValueError as exc:
@@ -129,9 +131,7 @@ async def get_preferences(user_id: UserDep, session: SessionDep):
 
 
 @router.patch("/api/notifications/preferences", response_model=PreferenceResponse)
-async def patch_preferences(
-    payload: PreferencePatch, user_id: UserDep, session: SessionDep
-):
+async def patch_preferences(payload: PreferencePatch, user_id: UserDep, session: SessionDep):
     return await update_preference(session, user_id, payload)
 
 
@@ -164,9 +164,16 @@ async def activity_feed(
         ActivityEntry.occurred_at >= datetime.now(UTC) - timedelta(days=days),
     ]
     if category:
-        filters.append(ActivityEntry.category == category)
+        categories = {
+            "cases": ("cases", "submissions"),
+            "documents": ("documents", "sharing"),
+        }.get(category, (category,))
+        filters.append(ActivityEntry.category.in_(categories))
+    total_filters = [ActivityEntry.user_id == user_id]
+    if category:
+        total_filters.append(ActivityEntry.category.in_(categories))
     total = await session.scalar(
-        select(func.count()).select_from(ActivityEntry).where(*filters)
+        select(func.count()).select_from(ActivityEntry).where(*total_filters)
     )
     rows = (
         await session.scalars(
@@ -222,6 +229,37 @@ async def audit_log(
             }
             for row in rows
         ]
+    }
+
+
+@internal_router.get("/users/{user_id}/export")
+async def internal_export(
+    user_id: UUID,
+    session: SessionDep,
+    token: Annotated[str | None, Header(alias="X-Internal-Service-Token")] = None,
+) -> dict:
+    expected = settings.internal_service_token.get_secret_value()
+    if not expected or not token or not hmac.compare_digest(token, expected):
+        raise _unauthorized("Invalid internal service token")
+    notifications = (
+        await session.scalars(
+            select(Notification)
+            .where(Notification.user_id == user_id)
+            .order_by(Notification.created_at)
+        )
+    ).all()
+    activities = (
+        await session.scalars(
+            select(ActivityEntry)
+            .where(ActivityEntry.user_id == user_id)
+            .order_by(ActivityEntry.occurred_at)
+        )
+    ).all()
+    return {
+        "notification_history": [
+            NotificationResponse.model_validate(row).model_dump() for row in notifications
+        ],
+        "activity_log": [ActivityResponse.model_validate(row).model_dump() for row in activities],
     }
 
 

@@ -8,7 +8,8 @@ export type TaskStatus =
   | "submitted"
   | "completed"
   | "failed"
-  | "blocked";
+  | "blocked"
+  | "cancelled";
 
 export type ExternalApplicationStatus =
   | "prepared"
@@ -342,6 +343,52 @@ export interface DigestResponse {
   new_opportunities: NotificationItem[];
   status_updates: NotificationItem[];
   completions: NotificationItem[];
+}
+
+export interface ActivityEntry {
+  id: string;
+  activity_type: string;
+  title: string;
+  description: string | null;
+  icon: string;
+  category: string;
+  case_id: string | null;
+  task_id: string | null;
+  document_id: string | null;
+  data: Record<string, unknown>;
+  occurred_at: string;
+}
+
+export interface ActivityFeedResponse {
+  activities: ActivityEntry[];
+  groups: Array<{ date: string; activities: ActivityEntry[] }>;
+  has_more: boolean;
+}
+
+export interface DocumentShare {
+  share_id: string;
+  document_id: string;
+  document_title: string;
+  shared_with: string | null;
+  purpose: string | null;
+  shared_at: string;
+  case_id: string | null;
+  task_id: string | null;
+}
+
+export interface WithdrawableApplication {
+  task_id: string;
+  case_id: string;
+  title: string;
+  authority: string;
+  submitted_at: string;
+  can_withdraw: boolean;
+  withdrawal_note: string;
+}
+
+export interface DeletionStatus {
+  status: "cooling_off" | "scheduled" | "none";
+  cooling_off_until?: string;
 }
 
 export interface LifeEvent {

@@ -1,14 +1,16 @@
+import hmac
 from collections.abc import AsyncIterator
 from typing import Annotated, Literal
 from uuid import UUID
 
 from contracts.lib.observability import reset_user_id, set_user_id
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth_client import AuthClient
+from app.config import settings
 from app.db import get_session
 from app.kafka import EventPublisher
 from app.models import AuthorityGrant, Delegation, DelegationApprovalRequest
@@ -40,6 +42,7 @@ from app.service import (
 )
 
 router = APIRouter(prefix="/api/authority", tags=["authority"])
+internal_router = APIRouter(prefix="/internal", include_in_schema=False)
 bearer = HTTPBearer(auto_error=False)
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 CredentialsDep = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]
@@ -122,9 +125,7 @@ async def case_access_list(
             granted_at=granted_at,
             granted_by=granted_by,
         )
-        for member_id, role, granted_at, granted_by in await list_case_access(
-            session, case_id
-        )
+        for member_id, role, granted_at, granted_by in await list_case_access(session, case_id)
     ]
 
 
@@ -248,11 +249,7 @@ async def delegation_requests(
         if direction == "sent"
         else DelegationApprovalRequest.to_user_id
     )
-    return list(
-        await session.scalars(
-            select(DelegationApprovalRequest).where(field == user_id)
-        )
-    )
+    return list(await session.scalars(select(DelegationApprovalRequest).where(field == user_id)))
 
 
 @router.post(
@@ -308,6 +305,42 @@ async def revoke_delegation_endpoint(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@internal_router.get("/users/{user_id}/export")
+async def internal_export(
+    user_id: UUID,
+    session: SessionDep,
+    token: Annotated[str | None, Header(alias="X-Internal-Service-Token")] = None,
+) -> dict:
+    expected = settings.internal_service_token.get_secret_value()
+    if not expected or not token or not hmac.compare_digest(token, expected):
+        raise _unauthorized("Invalid internal service token")
+    grants = (
+        await session.scalars(
+            select(AuthorityGrant)
+            .where((AuthorityGrant.grantor_id == user_id) | (AuthorityGrant.grantee_id == user_id))
+            .order_by(AuthorityGrant.granted_at)
+        )
+    ).all()
+    delegated = (
+        await session.scalars(
+            select(Delegation).where(
+                (Delegation.delegator_id == user_id) | (Delegation.delegate_id == user_id)
+            )
+        )
+    ).all()
+    return {
+        "grants": [_model_values(row) for row in grants],
+        "delegations": [_model_values(row) for row in delegated],
+    }
+
+
+def _model_values(row: object) -> dict:
+    return {
+        column.name: getattr(row, column.name)
+        for column in row.__table__.columns  # type: ignore[attr-defined]
+    }
+
+
 def _unauthorized(detail: str) -> HTTPException:
     return HTTPException(
         status.HTTP_401_UNAUTHORIZED,
@@ -327,9 +360,7 @@ async def _respond_to_request(
     if request is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Delegation request not found")
     try:
-        return await respond_to_delegation_request(
-            session, publisher, request, actor_id, accept
-        )
+        return await respond_to_delegation_request(session, publisher, request, actor_id, accept)
     except PermissionError as exc:
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
     except ValueError as exc:

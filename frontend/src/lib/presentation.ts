@@ -57,6 +57,7 @@ export function statusMessage(status: TaskStatus): string {
     completed: "This task has been completed successfully.",
     failed: "The latest attempt was unsuccessful and needs attention.",
     blocked: "A newly identified prerequisite must be completed first.",
+    cancelled: "This application was withdrawn.",
   };
   return messages[status];
 }

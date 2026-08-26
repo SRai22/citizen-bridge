@@ -39,6 +39,7 @@ class TaskStatus(StrEnum):
     COMPLETED = "completed"
     FAILED = "failed"
     BLOCKED = "blocked"
+    CANCELLED = "cancelled"
 
 
 def enum_column(enum: type[StrEnum], default: StrEnum) -> Mapped[Any]:
@@ -64,6 +65,7 @@ class Case(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     title: Mapped[str] = mapped_column(String(250))
     status: Mapped[CaseStatus] = enum_column(CaseStatus, CaseStatus.INTAKE)
     life_event_type: Mapped[str] = mapped_column(String(100), index=True)
+    owner_user_id: Mapped[UUID | None] = mapped_column(index=True)
     profile: Mapped[dict[str, Any]] = json_column()
     subject_person_id: Mapped[UUID | None] = mapped_column(index=True)
     coordinator_user_id: Mapped[UUID | None] = mapped_column(index=True)

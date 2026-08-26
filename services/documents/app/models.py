@@ -77,6 +77,7 @@ class DocumentAccessLog(Base):
     case_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
     task_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
     accessed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     document: Mapped[Document] = relationship(back_populates="accesses")
 
 

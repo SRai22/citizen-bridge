@@ -84,6 +84,7 @@ class AccessResponse(BaseModel):
     case_id: UUID | None
     task_id: UUID | None
     accessed_at: datetime
+    revoked_at: datetime | None = None
 
 
 class Requirement(BaseModel):

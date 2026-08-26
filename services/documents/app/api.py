@@ -1,15 +1,18 @@
+import hmac
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
 from contracts.lib.observability import reset_user_id, set_user_id
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth_client import AuthClient
+from app.config import settings
 from app.db import get_session
 from app.kafka import EventPublisher
 from app.models import Document, DocumentAccessLog
@@ -31,6 +34,7 @@ from app.service import (
 )
 
 router = APIRouter(prefix="/api/docs", tags=["documents"])
+internal_router = APIRouter(prefix="/internal", include_in_schema=False)
 bearer = HTTPBearer(auto_error=False)
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 CredentialsDep = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]
@@ -129,13 +133,75 @@ async def upload(
 
 
 @router.post("/check-requirements")
-async def requirements(
-    payload: RequirementsRequest, user_id: UserDep, session: SessionDep
-) -> dict:
+async def requirements(payload: RequirementsRequest, user_id: UserDep, session: SessionDep) -> dict:
     if payload.user_id != user_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Cannot inspect another user's documents")
     results = await check_requirements(session, user_id, payload.requirements)
     return {"requirements": [result.model_dump() for result in results]}
+
+
+@router.get("/shares")
+async def active_shares(user_id: UserDep, session: SessionDep) -> dict:
+    rows = (
+        await session.execute(
+            select(DocumentAccessLog, Document)
+            .join(Document, Document.id == DocumentAccessLog.document_id)
+            .where(
+                Document.owner_user_id == user_id,
+                DocumentAccessLog.action == "shared",
+                DocumentAccessLog.revoked_at.is_(None),
+            )
+            .order_by(DocumentAccessLog.accessed_at.desc())
+        )
+    ).all()
+    return {
+        "active_shares": [
+            {
+                "share_id": share.id,
+                "document_id": document.id,
+                "document_title": document.title,
+                "shared_with": share.recipient,
+                "purpose": share.purpose,
+                "shared_at": share.accessed_at,
+                "case_id": share.case_id,
+                "task_id": share.task_id,
+            }
+            for share, document in rows
+        ]
+    }
+
+
+@router.post("/shares/{share_id}/revoke")
+async def revoke_share(
+    share_id: UUID, user_id: UserDep, session: SessionDep, events: PublisherDep
+) -> dict:
+    share = await session.scalar(
+        select(DocumentAccessLog)
+        .join(Document, Document.id == DocumentAccessLog.document_id)
+        .where(
+            DocumentAccessLog.id == share_id,
+            DocumentAccessLog.action == "shared",
+            Document.owner_user_id == user_id,
+        )
+    )
+    if share is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Active share not found")
+    if share.revoked_at is None:
+        share.revoked_at = datetime.now(UTC)
+        await session.commit()
+        await events.publish(
+            {
+                "event_type": "document.share_revoked",
+                "user_id": str(user_id),
+                "share_id": str(share.id),
+                "document_id": str(share.document_id),
+                "timestamp": share.revoked_at.isoformat(),
+            }
+        )
+    return {
+        "revoked": True,
+        "note": "This does not delete copies already received by the government body.",
+    }
 
 
 @router.get("/{document_id}")
@@ -224,3 +290,35 @@ def _unauthorized(detail: str) -> HTTPException:
     return HTTPException(
         status.HTTP_401_UNAUTHORIZED, detail, headers={"WWW-Authenticate": "Bearer"}
     )
+
+
+@internal_router.get("/users/{user_id}/export")
+async def internal_export(
+    user_id: UUID,
+    session: SessionDep,
+    token: Annotated[str | None, Header(alias="X-Internal-Service-Token")] = None,
+) -> dict:
+    _require_internal(token)
+    rows = (
+        await session.scalars(
+            select(Document)
+            .where(Document.owner_user_id == user_id)
+            .options(selectinload(Document.accesses))
+            .order_by(Document.created_at)
+        )
+    ).all()
+    return {
+        "documents": [DocumentResponse.model_validate(row).model_dump() for row in rows],
+        "sharing_history": [
+            AccessResponse.model_validate(access).model_dump()
+            for row in rows
+            for access in row.accesses
+            if access.action == "shared"
+        ],
+    }
+
+
+def _require_internal(token: str | None) -> None:
+    expected = settings.internal_service_token.get_secret_value()
+    if not expected or not token or not hmac.compare_digest(token, expected):
+        raise _unauthorized("Invalid internal service token")

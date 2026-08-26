@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from typing import Any, Protocol
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models import Document, DocumentAccessLog
@@ -241,3 +241,10 @@ async def expire_documents(
 
 def _event(event_type: str, **fields: Any) -> dict[str, Any]:
     return {"event_type": event_type, "timestamp": datetime.now(UTC).isoformat(), **fields}
+
+
+async def delete_user_data(session: AsyncSession, event: dict[str, Any]) -> None:
+    await session.execute(
+        delete(Document).where(Document.owner_user_id == UUID(str(event["user_id"])))
+    )
+    await session.commit()

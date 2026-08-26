@@ -42,6 +42,7 @@ const STATUS_CONFIG: Record<Status, { label: string; className: string; symbol?:
     symbol: "🔴",
   },
   blocked: { label: "Blocked", className: "bg-rose-50 text-rose-800 ring-rose-200", symbol: "🔴" },
+  cancelled: { label: "Withdrawn", className: "bg-slate-100 text-slate-600 ring-slate-200", symbol: "—" },
 };
 
 export function StatusBadge({ status }: { status: Status }) {

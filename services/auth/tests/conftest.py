@@ -10,7 +10,7 @@ os.environ.setdefault("JWT_SECRET", "test-only-secret-with-at-least-32-character
 os.environ.setdefault("OTEL_ENABLED", "false")
 os.environ.setdefault("INTERNAL_SERVICE_TOKEN", "test-internal-token")
 
-from app.api import get_catalog, get_publisher
+from app.api import get_catalog, get_data_services, get_publisher
 from app.db.base import Base
 from app.db.session import get_session
 from app.main import app
@@ -27,6 +27,11 @@ class FakePublisher:
 class FakeCatalog:
     async def benefit_requirements(self) -> dict[str, int]:
         return {"annual_income": 3, "date_of_birth": 4}
+
+
+class FakeDataServices:
+    async def export(self, user_id: str) -> dict[str, object]:
+        return {"cases": [], "documents": []}
 
 
 @pytest_asyncio.fixture
@@ -47,6 +52,8 @@ async def api_context() -> AsyncIterator[tuple[AsyncClient, FakePublisher, async
     app.dependency_overrides[get_session] = override_session
     app.dependency_overrides[get_publisher] = lambda: publisher
     app.dependency_overrides[get_catalog] = lambda: FakeCatalog()
+    app.dependency_overrides[get_data_services] = lambda: FakeDataServices()
+    app.state.session_factory = sessions
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             yield client, publisher, sessions

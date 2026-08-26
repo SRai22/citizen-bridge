@@ -1,10 +1,11 @@
+import hmac
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID, uuid4
 
 from contracts.lib.observability import reset_user_id, set_user_id
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,11 +21,13 @@ from app.clients import (
     DocumentsClient,
     UserContext,
 )
+from app.config import settings
 from app.db import get_session
 from app.kafka import EventPublisher
 from app.models import (
     ActiveBenefit,
     ApprovalRequest,
+    AuditEntry,
     Case,
     CaseStatus,
     ExternalApplication,
@@ -56,6 +59,7 @@ from app.service import (
 
 router = APIRouter(prefix="/api/cases", tags=["cases"])
 approvals_router = APIRouter(prefix="/api/approvals", tags=["approvals"])
+internal_router = APIRouter(prefix="/internal", include_in_schema=False)
 bearer = HTTPBearer(auto_error=False)
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 CredentialsDep = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]
@@ -304,6 +308,93 @@ async def index(
             and (life_event_type is None or case.life_event_type == life_event_type)
         ]
     )
+
+
+@router.get("/withdrawable")
+async def withdrawable(user: UserDep, session: SessionDep, authority: AuthorityDep) -> dict:
+    try:
+        accessible = await authority.case_access(user.user_id)
+    except ConnectionError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+    case_ids = [UUID(case_id) for case_id, _ in accessible]
+    if not case_ids:
+        return {"withdrawable": []}
+    rows = (
+        await session.scalars(
+            select(Task)
+            .where(Task.case_id.in_(case_ids))
+            .options(selectinload(Task.external_applications))
+            .order_by(Task.updated_at.desc())
+        )
+    ).all()
+    return {
+        "withdrawable": [
+            {
+                "task_id": task.id,
+                "case_id": task.case_id,
+                "title": task.title,
+                "authority": application.adapter_type.replace("_", " ").title(),
+                "submitted_at": application.created_at,
+                "can_withdraw": task.status in {TaskStatus.SUBMITTED, TaskStatus.PENDING},
+                "withdrawal_note": "Applications under review may not be withdrawable.",
+            }
+            for task in rows
+            for application in task.external_applications[-1:]
+        ]
+    }
+
+
+@router.post("/{case_id}/tasks/{task_id}/withdraw")
+async def withdraw_application(
+    case_id: UUID,
+    task_id: UUID,
+    user: UserDep,
+    session: SessionDep,
+    authority: AuthorityDep,
+    events: PublisherDep,
+) -> dict:
+    await access(authority, user.user_id, case_id, "submit")
+    task = await _submission_task(session, case_id, task_id)
+    if task.status not in {TaskStatus.SUBMITTED, TaskStatus.PENDING}:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This application cannot be withdrawn (already approved/processed)",
+        )
+    application = task.external_applications[-1] if task.external_applications else None
+    if application is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This task has not been submitted")
+    previous = task.status
+    task.status = TaskStatus.CANCELLED
+    application.status = "cancelled"
+    session.add(
+        AuditEntry(
+            case_id=case_id,
+            task_id=task_id,
+            event_type="application_withdrawn",
+            description=f"Withdrawal requested for {task.title}",
+            details={"changed_by": user.user_id, "authority": application.adapter_type},
+        )
+    )
+    await session.commit()
+    await events.publish(
+        "tasks",
+        {
+            "event_type": "task.status_changed",
+            "task_id": str(task.id),
+            "case_id": str(case_id),
+            "old_status": previous.value,
+            "new_status": "cancelled",
+            "changed_by": user.user_id,
+            "title": task.title,
+            "timestamp": datetime.now(UTC).isoformat(),
+        },
+    )
+    authority_name = application.adapter_type.replace("_", " ").title()
+    return {
+        "withdrawn": True,
+        "task_status": "cancelled",
+        "note": f"Withdrawal request sent to {authority_name}. Processing may take 1-3 days.",
+    }
 
 
 @router.get("/context/for-whom")
@@ -697,4 +788,35 @@ def _application_payload(application: ExternalApplication) -> dict:
         "response_payload": application.response_payload,
         "submitted_at": application.created_at,
         "responded_at": None,
+    }
+
+
+@internal_router.get("/users/{user_id}/export")
+async def internal_export(
+    user_id: UUID,
+    session: SessionDep,
+    token: Annotated[str | None, Header(alias="X-Internal-Service-Token")] = None,
+) -> dict:
+    expected = settings.internal_service_token.get_secret_value()
+    if not expected or not token or not hmac.compare_digest(token, expected):
+        raise _unauthorized("Invalid internal service token")
+    ids = list(
+        await session.scalars(
+            select(Case.id).where(Case.owner_user_id == user_id).order_by(Case.created_at)
+        )
+    )
+    cases = [loaded for case_id in ids if (loaded := await get_case(session, case_id))]
+    return {
+        "cases": [
+            {
+                "id": case.id,
+                "title": case.title,
+                "status": case.status,
+                "life_event_type": case.life_event_type,
+                "created_at": case.created_at,
+                "updated_at": case.updated_at,
+                "tasks": [_task_payload(task) for task in case.tasks],
+            }
+            for case in cases
+        ]
     }

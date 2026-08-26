@@ -187,3 +187,8 @@ class FamilyMemberResponse(BaseModel):
     source: str
     created_at: datetime
     updated_at: datetime
+
+
+class DeletionRequest(BaseModel):
+    confirmation: Literal["DELETE MY ACCOUNT"]
+    password: str = Field(min_length=1, max_length=72)

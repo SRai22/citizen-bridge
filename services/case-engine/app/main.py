@@ -16,14 +16,14 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from starlette.responses import JSONResponse, Response
 
-from app.api import approvals_router, router
+from app.api import approvals_router, internal_router, router
 from app.benefits import discover
 from app.clients import AIClient, AuthClient, AuthorityClient, CatalogClient, DocumentsClient
 from app.config import settings
 from app.db.session import engine, session_factory
 from app.grpc import create_server
 from app.kafka import EventPublisher, ProfileEventConsumer
-from app.service import mark_overdue_tasks
+from app.service import delete_user_data, mark_overdue_tasks
 
 started_at = datetime.now(UTC)
 logger = configure_logging(settings.service_name)
@@ -65,8 +65,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 event,
             )
 
+    async def delete_user(event: dict) -> None:
+        async with session_factory() as session:
+            await delete_user_data(session, event)
+
     consumer = ProfileEventConsumer(
-        settings.kafka_bootstrap_servers, session_factory, discover_benefits
+        settings.kafka_bootstrap_servers, session_factory, discover_benefits, delete_user
     )
     await events.start()
     await consumer.start()
@@ -119,6 +123,7 @@ app = FastAPI(
 app.state.health_checks = {"database": check_database}
 app.include_router(router)
 app.include_router(approvals_router)
+app.include_router(internal_router)
 app.middleware("http")(http_metrics_middleware)
 app.middleware("http")(correlation_middleware)
 setup_tracing(

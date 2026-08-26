@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from uuid import UUID
 
 from contracts.lib.observability import (
     build_health,
@@ -16,13 +17,13 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from starlette.responses import JSONResponse, Response
 
-from app.api import router
+from app.api import internal_router, router
 from app.clients import AuthClient, AuthorityClient
 from app.config import settings
 from app.db.session import engine, session_factory
 from app.grpc import create_server
 from app.kafka import DomainEventConsumer, EventPublisher
-from app.service import generate_weekly_digests, handle_event
+from app.service import delete_user_data, generate_weekly_digests, handle_event
 from app.websocket import ConnectionManager
 
 started_at = datetime.now(UTC)
@@ -56,14 +57,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     async def consume(event: dict) -> None:
         async with session_factory() as session:
+            if event.get("event_type") == "user.deleted":
+                await delete_user_data(session, UUID(str(event["user_id"])))
+                return
             await handle_event(session, connections, authority, event, publisher)
 
-    consumer = DomainEventConsumer(
-        settings.kafka_bootstrap_servers, session_factory, consume
-    )
-    grpc_server = create_server(
-        settings.grpc_port, session_factory, connections, publisher
-    )
+    consumer = DomainEventConsumer(settings.kafka_bootstrap_servers, session_factory, consume)
+    grpc_server = create_server(settings.grpc_port, session_factory, connections, publisher)
     await publisher.start()
     await grpc_server.start()
     await consumer.start()
@@ -103,6 +103,7 @@ app = FastAPI(
 app.state.health_checks = {"database": check_database}
 app.state.connections = connections
 app.include_router(router)
+app.include_router(internal_router)
 app.middleware("http")(http_metrics_middleware)
 app.middleware("http")(correlation_middleware)
 setup_tracing(

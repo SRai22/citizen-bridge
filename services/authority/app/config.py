@@ -1,4 +1,4 @@
-from pydantic import field_validator
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     database_url: str
     kafka_bootstrap_servers: str = "kafka:9092"
     auth_grpc_host: str = "auth:50051"
+    internal_service_token: SecretStr = SecretStr("")
     http_port: int = 8002
     grpc_port: int = 50052
     service_version: str = "0.1.0"

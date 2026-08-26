@@ -91,6 +91,9 @@ function backendResponse(response: Response, payload: string) {
       ...(response.headers.get("x-correlation-id")
         ? { "X-Correlation-ID": response.headers.get("x-correlation-id")! }
         : {}),
+      ...(response.headers.get("content-disposition")
+        ? { "Content-Disposition": response.headers.get("content-disposition")! }
+        : {}),
     },
   });
 }

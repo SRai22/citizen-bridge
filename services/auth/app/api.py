@@ -1,25 +1,44 @@
 import asyncio
 import hmac
+import json
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 from uuid import UUID
 
 from contracts.lib.observability import reset_user_id, set_user_id
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    status,
+)
+from fastapi.encoders import jsonable_encoder
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.clients import CatalogClient
+from app.clients import CatalogClient, DataServicesClient
 from app.config import settings
 from app.db import get_session
 from app.kafka import EventPublisher
-from app.models import FamilyMember, ProfileFieldProvenance, RefreshToken, User
+from app.models import (
+    AccountDeletion,
+    DataExport,
+    FamilyMember,
+    ProfileFieldProvenance,
+    RefreshToken,
+    User,
+)
 from app.profile import completeness, enrich_profile, missing_fields, profile_payload, suggestions
 from app.schemas import (
     AccessTokenResponse,
+    DeletionRequest,
     EnrichmentField,
     EnrichmentRequest,
     FamilyMemberCreate,
@@ -69,6 +88,13 @@ def get_catalog(request: Request) -> CatalogClient:
 
 
 CatalogDep = Annotated[CatalogClient, Depends(get_catalog)]
+
+
+def get_data_services(request: Request) -> DataServicesClient:
+    return request.app.state.data_services
+
+
+DataServicesDep = Annotated[DataServicesClient, Depends(get_data_services)]
 
 
 async def current_user(session: SessionDep, credentials: CredentialsDep) -> AsyncIterator[User]:
@@ -254,6 +280,117 @@ async def logout(user: CurrentUserDep, session: SessionDep) -> Response:
 @router.get("/me", response_model=UserResponse)
 async def me(user: CurrentUserDep) -> User:
     return user
+
+
+@router.post("/me/export", status_code=status.HTTP_202_ACCEPTED)
+async def request_export(
+    background: BackgroundTasks,
+    request: Request,
+    user: CurrentUserDep,
+    session: SessionDep,
+    services: DataServicesDep,
+) -> dict[str, Any]:
+    export = DataExport(user_id=user.id)
+    session.add(export)
+    await session.commit()
+    background.add_task(generate_export, export.id, services, request.app.state.session_factory)
+    return {
+        "export_id": export.id,
+        "status": export.status,
+        "estimated_ready": datetime.now(UTC) + timedelta(minutes=1),
+    }
+
+
+@router.get("/me/export/{export_id}")
+async def export_status(
+    export_id: UUID, user: CurrentUserDep, session: SessionDep
+) -> dict[str, Any]:
+    export = await _owned_export(session, export_id, user.id)
+    response: dict[str, Any] = {"status": export.status}
+    if export.status == "ready":
+        response["download_url"] = f"/api/auth/me/export/{export.id}/download"
+    if export.status == "failed":
+        response["detail"] = export.error
+    return response
+
+
+@router.get("/me/export/{export_id}/download")
+async def download_export(export_id: UUID, user: CurrentUserDep, session: SessionDep) -> Response:
+    export = await _owned_export(session, export_id, user.id)
+    if export.status != "ready" or export.payload is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Export is not ready")
+    return Response(
+        json.dumps(export.payload, indent=2, ensure_ascii=False),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="citizen-bridge-export-{export.id}.json"'
+        },
+    )
+
+
+@router.post("/me/delete")
+async def request_deletion(
+    payload: DeletionRequest,
+    user: CurrentUserDep,
+    session: SessionDep,
+    publisher: PublisherDep,
+) -> dict[str, Any]:
+    if not await asyncio.to_thread(verify_password, payload.password, user.password_hash):
+        raise _unauthorized("Password verification failed")
+    existing = await session.scalar(
+        select(AccountDeletion).where(
+            AccountDeletion.user_id == user.id,
+            AccountDeletion.status == "cooling_off",
+        )
+    )
+    if existing is None:
+        existing = AccountDeletion(
+            user_id=user.id,
+            cooling_off_until=datetime.now(UTC)
+            + timedelta(days=settings.deletion_cooling_off_days),
+        )
+        session.add(existing)
+        await session.flush()
+        await publisher.publish(
+            _event(
+                "user.deletion_scheduled",
+                user,
+                deletion_id=str(existing.id),
+                delete_at=existing.cooling_off_until.isoformat(),
+            )
+        )
+        await session.commit()
+    return _deletion_payload(existing)
+
+
+@router.post("/me/delete/cancel")
+async def cancel_deletion(user: CurrentUserDep, session: SessionDep) -> dict[str, bool]:
+    deletion = await session.scalar(
+        select(AccountDeletion).where(
+            AccountDeletion.user_id == user.id,
+            AccountDeletion.status == "cooling_off",
+        )
+    )
+    if deletion is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No pending account deletion")
+    deletion.status = "cancelled"
+    deletion.cancelled_at = datetime.now(UTC)
+    await session.commit()
+    return {"cancelled": True, "account_active": True}
+
+
+@router.get("/me/delete/status")
+async def deletion_status(user: CurrentUserDep, session: SessionDep) -> dict[str, Any]:
+    deletion = await session.scalar(
+        select(AccountDeletion)
+        .where(AccountDeletion.user_id == user.id, AccountDeletion.status == "cooling_off")
+        .order_by(AccountDeletion.created_at.desc())
+    )
+    return (
+        {"status": "none"}
+        if deletion is None
+        else {"status": "cooling_off", "cooling_off_until": deletion.cooling_off_until}
+    )
 
 
 @router.get("/me/family", response_model=list[FamilyMemberResponse])
@@ -519,4 +656,83 @@ def _event(event_type: str, user: User, **fields: Any) -> dict[str, Any]:
         "user_id": str(user.id),
         "timestamp": datetime.now(UTC).isoformat(),
         **fields,
+    }
+
+
+async def _owned_export(session: AsyncSession, export_id: UUID, user_id: UUID) -> DataExport:
+    export = await session.scalar(
+        select(DataExport).where(DataExport.id == export_id, DataExport.user_id == user_id)
+    )
+    if export is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Export not found")
+    return export
+
+
+async def generate_export(
+    export_id: UUID,
+    services: DataServicesClient,
+    sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    async with sessions() as session:
+        export = await session.get(DataExport, export_id)
+        if export is None:
+            return
+        user = await session.get(User, export.user_id)
+        if user is None:
+            return
+        try:
+            family = (
+                await session.scalars(select(FamilyMember).where(FamilyMember.user_id == user.id))
+            ).all()
+            provenance = (
+                await session.scalars(
+                    select(ProfileFieldProvenance).where(ProfileFieldProvenance.user_id == user.id)
+                )
+            ).all()
+            remote = await services.export(str(user.id))
+            export.payload = jsonable_encoder(
+                {
+                    "exported_at": datetime.now(UTC),
+                    "profile": {
+                        **profile_payload(user),
+                        "user_id": user.id,
+                        "username": user.username,
+                        "phone": user.phone,
+                        "aadhaar_linked": user.aadhaar_linked,
+                        "is_active": user.is_active,
+                        "created_at": user.created_at,
+                        "updated_at": user.updated_at,
+                    },
+                    "profile_provenance": [
+                        ProvenanceResponse.model_validate(row) for row in provenance
+                    ],
+                    "family_members": [FamilyMemberResponse.model_validate(row) for row in family],
+                    **remote,
+                }
+            )
+            export.status = "ready"
+            export.completed_at = datetime.now(UTC)
+        except Exception as exc:
+            export.status = "failed"
+            export.error = str(exc)[:500]
+        await session.commit()
+
+
+def _deletion_payload(deletion: AccountDeletion) -> dict[str, Any]:
+    return {
+        "deletion_id": deletion.id,
+        "status": deletion.status,
+        "cooling_off_until": deletion.cooling_off_until,
+        "what_will_be_deleted": [
+            "Profile and personal data",
+            "Documents metadata",
+            "Case history",
+            "Activity log",
+            "Notification history",
+        ],
+        "what_cannot_be_recalled": [
+            "Government submissions already made",
+            "Certificates already issued",
+            "Data already shared with government bodies",
+        ],
     }

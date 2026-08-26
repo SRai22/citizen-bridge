@@ -20,6 +20,7 @@ EVENT_TYPES = (
     "user.profile_updated",
     "user.logged_in",
     "benefit.discovered",
+    "user.deleted",
 )
 
 

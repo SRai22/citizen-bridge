@@ -10,12 +10,18 @@ class Settings(BaseSettings):
     jwt_secret: SecretStr
     kafka_bootstrap_servers: str = "kafka:9092"
     catalog_http_url: str = "http://catalog:8006"
+    authority_http_url: str = "http://authority:8002"
+    case_engine_http_url: str = "http://case-engine:8003"
+    documents_http_url: str = "http://documents:8004"
+    notifications_http_url: str = "http://notifications:8005"
     internal_service_token: SecretStr = SecretStr("")
     http_port: int = 8001
     grpc_port: int = 50051
     service_version: str = "0.1.0"
     access_token_minutes: int = 15
     refresh_token_days: int = 7
+    deletion_cooling_off_days: int = 7
+    deletion_check_seconds: int = 60
     otel_enabled: bool = False
     otel_exporter_otlp_endpoint: str = "http://jaeger:4317"
 

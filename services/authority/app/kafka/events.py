@@ -21,6 +21,7 @@ class UserEventConsumer(EventConsumer):
         bootstrap_servers: str,
         sessions: async_sessionmaker[AsyncSession],
         handler: Callable[[dict[str, Any]], Awaitable[None]],
+        deletion_handler: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
     ) -> None:
         super().__init__(
             bootstrap_servers,
@@ -30,3 +31,5 @@ class UserEventConsumer(EventConsumer):
             ProcessedEvent,
         )
         self.on("user.registered", handler)
+        if deletion_handler:
+            self.on("user.deleted", deletion_handler)
