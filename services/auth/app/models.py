@@ -13,7 +13,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship as orm_relationship
 
 from app.db.base import Base
 
@@ -43,13 +43,13 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
+    refresh_tokens: Mapped[list["RefreshToken"]] = orm_relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
-    profile_provenance: Mapped[list["ProfileFieldProvenance"]] = relationship(
+    profile_provenance: Mapped[list["ProfileFieldProvenance"]] = orm_relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
-    family_members: Mapped[list["FamilyMember"]] = relationship(
+    family_members: Mapped[list["FamilyMember"]] = orm_relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -80,7 +80,7 @@ class FamilyMember(Base):
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
     )
-    user: Mapped[User] = relationship(back_populates="family_members")
+    user: Mapped[User] = orm_relationship(back_populates="family_members")
 
 
 class ProfileFieldProvenance(Base):
@@ -107,7 +107,7 @@ class ProfileFieldProvenance(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
-    user: Mapped[User] = relationship(back_populates="profile_provenance")
+    user: Mapped[User] = orm_relationship(back_populates="profile_provenance")
 
 
 class ProcessedEvent(Base):
@@ -139,4 +139,4 @@ class RefreshToken(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
     device_info: Mapped[str | None] = mapped_column(String(512))
-    user: Mapped[User] = relationship(back_populates="refresh_tokens")
+    user: Mapped[User] = orm_relationship(back_populates="refresh_tokens")
