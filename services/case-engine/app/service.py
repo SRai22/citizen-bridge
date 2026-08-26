@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.clients import AccessContext, AuthorityClient
 from app.models import (
+    ActiveBenefit,
     AuditEntry,
     Case,
     CaseStatus,
@@ -63,6 +64,7 @@ async def create_case(
     catalog: WorkflowCatalog,
     user_id: UUID,
     payload: CaseCreate,
+    definitions: list[dict] | None = None,
 ) -> tuple[Case, AccessContext]:
     event = payload.life_event
     household = None
@@ -87,7 +89,9 @@ async def create_case(
     session.add(case)
     await session.flush()
 
-    definitions = await catalog.list_applicable(event.context)
+    definitions = (
+        definitions if definitions is not None else await catalog.list_applicable(event.context)
+    )
     tasks_by_workflow: dict[str, Task] = {}
     for definition in definitions:
         task_definition = definition["tasks"][0]
@@ -249,6 +253,31 @@ async def transition_task(
             details={"changed_by": str(user_id)},
         )
     )
+    completed_case: Case | None = None
+    if status == TaskStatus.COMPLETED:
+        await session.flush()
+        unfinished = await session.scalar(
+            select(Task.id).where(
+                Task.case_id == task.case_id,
+                Task.id != task.id,
+                Task.status != TaskStatus.COMPLETED,
+            )
+        )
+        case = await session.get(Case, task.case_id)
+        if unfinished is None and case is not None:
+            case.status = CaseStatus.COMPLETED
+            completed_case = case
+            benefit_id = case.profile.get("benefit_id")
+            owner_id = case.profile.get("user_id")
+            if benefit_id and owner_id:
+                session.add(
+                    ActiveBenefit(
+                        user_id=UUID(str(owner_id)),
+                        benefit_id=str(benefit_id),
+                        source_case_id=case.id,
+                        amount=str(case.profile.get("benefit_amount", "")),
+                    )
+                )
     await session.commit()
     event_type = (
         "task.completed"
@@ -272,6 +301,17 @@ async def transition_task(
             output_data=output_data,
         ),
     )
+    if completed_case is not None:
+        await publisher.publish(
+            "cases",
+            _event(
+                "case.completed",
+                case_id=str(completed_case.id),
+                user_id=str(completed_case.profile.get("user_id") or user_id),
+                benefit_id=completed_case.profile.get("benefit_id"),
+                status=completed_case.status.value,
+            ),
+        )
     return task
 
 

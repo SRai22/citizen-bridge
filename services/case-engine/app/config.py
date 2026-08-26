@@ -1,3 +1,4 @@
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,8 +10,12 @@ class Settings(BaseSettings):
     database_url: str
     kafka_bootstrap_servers: str = "kafka:9092"
     auth_grpc_host: str = "auth:50051"
+    auth_http_url: str = "http://auth:8001"
     authority_grpc_host: str = "authority:50052"
     catalog_grpc_host: str = "catalog:50056"
+    catalog_http_url: str = "http://catalog:8006"
+    documents_grpc_host: str = "documents:50054"
+    internal_service_token: SecretStr = SecretStr("")
     ai_grpc_host: str = "ai:50057"
     http_port: int = 8003
     grpc_port: int = 50053

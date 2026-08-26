@@ -44,13 +44,25 @@ async def service(service_id: str, catalog: CatalogDep) -> dict:
     return result.model_dump()
 
 
+@router.get("/benefits")
+async def benefits(catalog: CatalogDep) -> dict:
+    return {"benefits": catalog.list_benefits()}
+
+
+@router.get("/benefits/{benefit_id}")
+async def benefit(benefit_id: str, catalog: CatalogDep) -> dict:
+    result = catalog.benefits.get(benefit_id)
+    if result is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Benefit not found")
+    return result.model_dump()
+
+
 @router.get("/workflows/{workflow_id}/stages")
 async def workflow_stages(workflow_id: str, catalog: CatalogDep) -> dict:
     workflow = _workflow(workflow_id, catalog)
     return {
         "stages": [
-            {"id": stage.id, "name": stage.label, "order": stage.order}
-            for stage in workflow.stages
+            {"id": stage.id, "name": stage.label, "order": stage.order} for stage in workflow.stages
         ]
     }
 

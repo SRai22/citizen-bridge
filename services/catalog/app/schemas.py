@@ -1,4 +1,4 @@
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -25,6 +25,24 @@ class TaskDefinition(CatalogModel):
 class ApplicabilityRule(CatalogModel):
     field: str = Field(pattern=r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$")
     equals: Any
+
+
+class EligibilityRule(CatalogModel):
+    field: Identifier
+    operator: Literal["eq", "lt", "lte", "gt", "gte", "in", "age_gte"]
+    value: Any | None = None
+    values: list[Any] = Field(default_factory=list)
+
+
+class BenefitDefinition(CatalogModel):
+    id: Identifier
+    name: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+    authority: str = Field(min_length=1)
+    amount: str = Field(min_length=1)
+    eligibility_rules: list[EligibilityRule] = Field(min_length=1)
+    required_documents: list[Identifier] = Field(default_factory=list)
+    workflow_id: Identifier
 
 
 class WorkflowDefinition(CatalogModel):

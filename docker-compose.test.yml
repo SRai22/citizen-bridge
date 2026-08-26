@@ -118,6 +118,8 @@ services:
       AUTH_GRPC_HOST: auth:50051
       AUTHORITY_GRPC_HOST: authority:50052
       CATALOG_GRPC_HOST: catalog:50056
+      DOCUMENTS_GRPC_HOST: documents:50054
+      INTERNAL_SERVICE_TOKEN: test-only-internal-service-token
       AI_GRPC_HOST: ai:50057
       OTEL_ENABLED: "false"
     ports: ["18003:8003"]
@@ -125,6 +127,8 @@ services:
       authority:
         condition: service_healthy
       catalog:
+        condition: service_healthy
+      documents:
         condition: service_healthy
       ai:
         condition: service_healthy

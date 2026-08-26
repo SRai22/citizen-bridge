@@ -47,6 +47,16 @@ async def test_catalog_http_api(client) -> None:
     stages = await client.get("/api/catalog/workflows/death_certificate/stages")
     assert stages.json()["stages"][0] == {"id": "submitted", "name": "Submitted", "order": 1}
 
+    benefits = await client.get("/api/catalog/benefits")
+    assert {item["id"] for item in benefits.json()["benefits"]} == {
+        "widow_pension",
+        "sc_st_scholarship",
+        "senior_pension",
+    }
+    assert (await client.get("/api/catalog/benefits/widow_pension")).json()["workflow_id"] == (
+        "widow_pension_application"
+    )
+
     assert (await client.get("/api/catalog/services/missing")).status_code == 404
     assert (await client.get("/health")).status_code == 200
 

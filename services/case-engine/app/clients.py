@@ -2,6 +2,7 @@ import json
 from dataclasses import dataclass, field
 
 import grpc
+import httpx
 from contracts.generated import (
     ai_pb2,
     ai_pb2_grpc,
@@ -11,6 +12,8 @@ from contracts.generated import (
     authority_pb2_grpc,
     catalog_pb2,
     catalog_pb2_grpc,
+    documents_pb2,
+    documents_pb2_grpc,
 )
 
 
@@ -18,6 +21,7 @@ from contracts.generated import (
 class UserContext:
     user_id: str
     username: str
+    token: str = ""
 
 
 @dataclass
@@ -29,9 +33,11 @@ class AccessContext:
 
 
 class AuthClient:
-    def __init__(self, target: str) -> None:
+    def __init__(self, target: str, http_url: str = "", internal_token: str = "") -> None:
         self.channel = grpc.aio.insecure_channel(target)
         self.stub = auth_pb2_grpc.AuthServiceStub(self.channel)
+        self.http = httpx.AsyncClient(base_url=http_url) if http_url else None
+        self.internal_token = internal_token
 
     async def validate(self, token: str) -> UserContext | None:
         try:
@@ -40,12 +46,39 @@ class AuthClient:
             raise ConnectionError("Auth service unavailable") from exc
         if not response.valid:
             return None
-        return UserContext(response.user_id, response.username)
+        return UserContext(response.user_id, response.username, token)
+
+    async def profile(self, user: UserContext) -> dict:
+        if self.http is None:
+            raise ConnectionError("Auth profile service unavailable")
+        try:
+            response = await self.http.get(
+                "/api/auth/me/profile", headers={"Authorization": f"Bearer {user.token}"}
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise ConnectionError("Auth profile service unavailable") from exc
+        return response.json()
+
+    async def profile_by_user(self, user_id: str) -> dict:
+        if self.http is None:
+            raise ConnectionError("Auth profile service unavailable")
+        try:
+            response = await self.http.get(
+                f"/api/auth/users/{user_id}/profile",
+                headers={"X-Internal-Service-Token": self.internal_token},
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise ConnectionError("Auth profile service unavailable") from exc
+        return response.json()
 
     async def check(self) -> None:
         await self.channel.channel_ready()
 
     async def close(self) -> None:
+        if self.http:
+            await self.http.aclose()
         await self.channel.close()
 
 
@@ -127,9 +160,10 @@ class AuthorityClient:
 
 
 class CatalogClient:
-    def __init__(self, target: str) -> None:
+    def __init__(self, target: str, http_url: str = "") -> None:
         self.channel = grpc.aio.insecure_channel(target)
         self.stub = catalog_pb2_grpc.CatalogServiceStub(self.channel)
+        self.http = httpx.AsyncClient(base_url=http_url) if http_url else None
 
     async def list_applicable(self, profile: dict[str, object]) -> list[dict]:
         try:
@@ -141,6 +175,58 @@ class CatalogClient:
                 raise ValueError(exc.details()) from exc
             raise ConnectionError("Catalog service unavailable") from exc
         return [json.loads(workflow.definition_json) for workflow in response.workflows]
+
+    async def benefits(self) -> list[dict]:
+        return (await self._get("/api/catalog/benefits"))["benefits"]
+
+    async def benefit(self, benefit_id: str) -> dict | None:
+        try:
+            return await self._get(f"/api/catalog/benefits/{benefit_id}")
+        except KeyError:
+            return None
+
+    async def workflow(self, workflow_id: str) -> dict:
+        return await self._get(f"/api/catalog/workflows/{workflow_id}")
+
+    async def _get(self, path: str) -> dict:
+        if self.http is None:
+            raise ConnectionError("Catalog HTTP service unavailable")
+        try:
+            response = await self.http.get(path)
+            if response.status_code == 404:
+                raise KeyError(path)
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise ConnectionError("Catalog service unavailable") from exc
+        return response.json()
+
+    async def check(self) -> None:
+        await self.channel.channel_ready()
+
+    async def close(self) -> None:
+        if self.http:
+            await self.http.aclose()
+        await self.channel.close()
+
+
+class DocumentsClient:
+    def __init__(self, target: str) -> None:
+        self.channel = grpc.aio.insecure_channel(target)
+        self.stub = documents_pb2_grpc.DocumentServiceStub(self.channel)
+
+    async def check_requirements(self, user_id: str, document_types: list[str]) -> dict:
+        try:
+            response = await self.stub.CheckRequirements(
+                documents_pb2.CheckRequirementsRequest(
+                    user_id=user_id, document_types=document_types
+                )
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise ConnectionError("Documents service unavailable") from exc
+        return {
+            "available": list(response.available_types),
+            "missing": list(response.missing_types),
+        }
 
     async def check(self) -> None:
         await self.channel.channel_ready()
@@ -157,9 +243,7 @@ class AIClient:
     async def interpret_rejection(self, task_id: str, rejection_text: str) -> dict:
         try:
             response = await self.stub.InterpretRejection(
-                ai_pb2.InterpretRejectionRequest(
-                    task_id=task_id, rejection_text=rejection_text
-                )
+                ai_pb2.InterpretRejectionRequest(task_id=task_id, rejection_text=rejection_text)
             )
         except grpc.aio.AioRpcError as exc:
             raise ConnectionError("AI service unavailable") from exc

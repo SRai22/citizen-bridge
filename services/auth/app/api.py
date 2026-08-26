@@ -287,11 +287,31 @@ async def update_me(
 
 
 @router.get("/me/profile")
-async def get_profile(user: CurrentUserDep, catalog: CatalogDep) -> dict[str, Any]:
+async def get_profile(
+    user: CurrentUserDep, catalog: CatalogDep, session: SessionDep
+) -> dict[str, Any]:
     missing = missing_fields(user)
     requirements = await catalog.benefit_requirements()
+    provenance_rows = (
+        await session.scalars(
+            select(ProfileFieldProvenance)
+            .where(ProfileFieldProvenance.user_id == user.id)
+            .order_by(ProfileFieldProvenance.created_at.desc())
+        )
+    ).all()
+    provenance: dict[str, dict[str, Any]] = {}
+    for row in provenance_rows:
+        provenance.setdefault(
+            row.field_name,
+            {
+                "type": row.source_type,
+                "reference": row.source_reference,
+                "verified": row.verified,
+            },
+        )
     return {
         "profile": profile_payload(user),
+        "provenance": provenance,
         "completeness_percent": completeness(user),
         "missing_fields": missing,
         "enrichment_suggestions": suggestions(missing, requirements),
@@ -339,9 +359,7 @@ async def provenance_history(
             .order_by(ProfileFieldProvenance.created_at.desc())
         )
     ).all()
-    return {
-        "history": [ProvenanceResponse.model_validate(row).model_dump() for row in rows]
-    }
+    return {"history": [ProvenanceResponse.model_validate(row).model_dump() for row in rows]}
 
 
 @router.patch("/me/profile/{field_name}/provenance/{provenance_id}")
@@ -378,9 +396,7 @@ async def internal_enrich(
     publisher: PublisherDep,
     internal_token: Annotated[str | None, Header(alias="X-Internal-Service-Token")] = None,
 ) -> dict[str, Any]:
-    expected = settings.internal_service_token.get_secret_value()
-    if not expected or not internal_token or not hmac.compare_digest(internal_token, expected):
-        raise _unauthorized("Invalid internal service token")
+    _require_internal(internal_token)
     user = await session.get(User, user_id)
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
@@ -391,6 +407,25 @@ async def internal_enrich(
     await publisher.publish(_event("user.profile_updated", user, changed_fields=changed))
     await session.commit()
     return {"profile": profile_payload(user), "completeness_percent": completeness(user)}
+
+
+@router.get("/users/{user_id}/profile")
+async def internal_profile(
+    user_id: UUID,
+    session: SessionDep,
+    internal_token: Annotated[str | None, Header(alias="X-Internal-Service-Token")] = None,
+) -> dict[str, Any]:
+    _require_internal(internal_token)
+    user = await session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    return {"profile": profile_payload(user)}
+
+
+def _require_internal(internal_token: str | None) -> None:
+    expected = settings.internal_service_token.get_secret_value()
+    if not expected or not internal_token or not hmac.compare_digest(internal_token, expected):
+        raise _unauthorized("Invalid internal service token")
 
 
 def _unauthorized(detail: str) -> HTTPException:

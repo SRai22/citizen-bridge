@@ -162,9 +162,7 @@ class TaskWaitState(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("cases.tasks.id", ondelete="CASCADE"), unique=True, index=True
     )
     stages_known: Mapped[bool] = mapped_column(Boolean, default=False)
-    stages: Mapped[list[dict[str, Any]]] = mapped_column(
-        MutableList.as_mutable(JSON), default=list
-    )
+    stages: Mapped[list[dict[str, Any]]] = mapped_column(MutableList.as_mutable(JSON), default=list)
     current_stage: Mapped[str | None] = mapped_column(String(100))
     stage_entered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     estimated_wait_days_min: Mapped[int | None] = mapped_column(Integer)
@@ -233,3 +231,41 @@ class AuditEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     event_type: Mapped[str] = mapped_column(String(100), index=True)
     description: Mapped[str] = mapped_column(String(1000))
     details: Mapped[dict[str, Any]] = json_column()
+
+
+class ActiveBenefit(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "active_benefits"
+    __table_args__ = (
+        UniqueConstraint("user_id", "benefit_id", name="uq_active_benefit_user_scheme"),
+        {"schema": "cases"},
+    )
+
+    user_id: Mapped[UUID] = mapped_column(index=True)
+    benefit_id: Mapped[str] = mapped_column(String(100), index=True)
+    source_case_id: Mapped[UUID] = mapped_column(
+        ForeignKey("cases.cases.id", ondelete="CASCADE"), unique=True
+    )
+    status: Mapped[str] = mapped_column(String(50), default="active", index=True)
+    amount: Mapped[str] = mapped_column(String(100))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    next_payment_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class BenefitDiscovery(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "benefit_discoveries"
+    __table_args__ = (
+        UniqueConstraint("user_id", "benefit_id", name="uq_benefit_discovery_user_scheme"),
+        {"schema": "cases"},
+    )
+
+    user_id: Mapped[UUID] = mapped_column(index=True)
+    benefit_id: Mapped[str] = mapped_column(String(100), index=True)
+
+
+class ProcessedEvent(Base):
+    __tablename__ = "processed_events"
+    __table_args__ = {"schema": "cases"}
+
+    event_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    consumer_group: Mapped[str] = mapped_column(String(100))

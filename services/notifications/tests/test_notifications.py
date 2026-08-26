@@ -151,3 +151,24 @@ async def test_connection_manager_broadcasts() -> None:
     assert socket.messages == [{"type": "notification"}]
     manager.disconnect(socket, "user-1")
     assert "user-1" not in manager.connections
+
+
+@pytest.mark.asyncio
+async def test_benefit_discovery_notifies_the_user(notification_context) -> None:
+    _, sessions = notification_context
+    user_id = uuid4()
+    async with sessions() as session:
+        created = await handle_event(
+            session,
+            FakeBroadcaster(),
+            FakeAuthority([]),
+            {
+                "event_id": str(uuid4()),
+                "event_type": "benefit.discovered",
+                "user_id": str(user_id),
+                "benefit_id": "widow_pension",
+                "name": "Widow Pension",
+            },
+        )
+    assert created[0].notification_type == "benefit_discovered"
+    assert created[0].title == "New benefit: Widow Pension"

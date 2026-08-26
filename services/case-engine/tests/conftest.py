@@ -9,7 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
 os.environ.setdefault("OTEL_ENABLED", "false")
 
-from app.api import ai_client, auth_client, authority_client, catalog_client, publisher
+from app.api import (
+    ai_client,
+    auth_client,
+    authority_client,
+    catalog_client,
+    documents_client,
+    publisher,
+)
 from app.clients import AccessContext, UserContext
 from app.db.base import Base
 from app.db.session import get_session
@@ -26,6 +33,20 @@ class FakeAuth:
         except ValueError:
             return None
         return UserContext(str(user_id), "test-user") if user_id in self.users else None
+
+    async def profile(self, user: UserContext) -> dict:
+        return {
+            "profile": {
+                "gender": "female",
+                "marital_status": "widowed",
+                "annual_income": 120000,
+                "state": "Karnataka",
+                "date_of_birth": "1950-01-01",
+                "caste_category": "general",
+                "education_level": None,
+            },
+            "provenance": {"annual_income": {"type": "user_input", "verified": False}},
+        }
 
 
 class FakeAuthority:
@@ -128,6 +149,56 @@ class FakeCatalog:
             for workflow_id, task_id, title, days, dependencies in values
         ]
 
+    async def benefits(self) -> list[dict]:
+        return [await self.benefit("widow_pension"), await self.benefit("senior_pension")]
+
+    async def benefit(self, benefit_id: str) -> dict | None:
+        values = {
+            "widow_pension": {
+                "name": "Widow Pension",
+                "description": "Monthly assistance",
+                "authority": "Karnataka",
+                "amount": "₹1,000 per month",
+                "eligibility_rules": [
+                    {"field": "gender", "operator": "eq", "value": "female", "values": []},
+                    {"field": "marital_status", "operator": "eq", "value": "widowed", "values": []},
+                    {"field": "annual_income", "operator": "lt", "value": 200000, "values": []},
+                    {"field": "state", "operator": "eq", "value": "Karnataka", "values": []},
+                ],
+                "required_documents": ["aadhaar", "death_certificate"],
+                "workflow_id": "widow_pension_application",
+            },
+            "senior_pension": {
+                "name": "Senior Pension",
+                "description": "Senior assistance",
+                "authority": "Karnataka",
+                "amount": "₹1,200 per month",
+                "eligibility_rules": [
+                    {"field": "date_of_birth", "operator": "age_gte", "value": 60, "values": []}
+                ],
+                "required_documents": ["aadhaar"],
+                "workflow_id": "senior_pension",
+            },
+        }
+        return {"id": benefit_id, **values[benefit_id]} if benefit_id in values else None
+
+    async def workflow(self, workflow_id: str) -> dict:
+        return {
+            "id": workflow_id,
+            "description": "Apply for benefit",
+            "tasks": [
+                {"id": "application", "name": "Submit application", "estimated_duration_days": 30}
+            ],
+            "inter_workflow_dependencies": [],
+            "stages": [],
+            "typical_duration_days": [15, 30],
+        }
+
+
+class FakeDocuments:
+    async def check_requirements(self, user_id: str, document_types: list[str]) -> dict:
+        return {"available": document_types, "missing": []}
+
 
 class FakeAI:
     async def interpret_rejection(self, task_id: str, rejection_text: str) -> dict:
@@ -159,6 +230,7 @@ async def case_context():
     app.dependency_overrides[auth_client] = lambda: auth
     app.dependency_overrides[authority_client] = lambda: authority
     app.dependency_overrides[catalog_client] = lambda: FakeCatalog()
+    app.dependency_overrides[documents_client] = lambda: FakeDocuments()
     app.dependency_overrides[ai_client] = lambda: FakeAI()
     app.dependency_overrides[publisher] = lambda: events
     try:

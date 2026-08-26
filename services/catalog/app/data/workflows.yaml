@@ -17,6 +17,16 @@ known_stages: &known_stages
     order: 4
 
 workflows:
+  - id: widow_pension_application
+    description: Apply for Karnataka widow pension assistance.
+    adapter_type: widow_pension_application
+    dynamic: true
+    applicability_rules: []
+    tasks: [{id: widow_pension_form, name: Apply for Widow Pension, estimated_duration_days: 30}]
+    inter_workflow_dependencies: []
+    stages: *known_stages
+    typical_duration_days: [15, 30]
+
   - id: death_certificate
     description: Register a death and obtain the official death certificate.
     adapter_type: death_certificate

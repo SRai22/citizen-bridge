@@ -10,23 +10,34 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.benefits import evaluate, readiness
 from app.clients import (
     AccessContext,
     AIClient,
     AuthClient,
     AuthorityClient,
     CatalogClient,
+    DocumentsClient,
     UserContext,
 )
 from app.db import get_session
 from app.kafka import EventPublisher
-from app.models import ApprovalRequest, ExternalApplication, Task, TaskStatus
+from app.models import (
+    ActiveBenefit,
+    ApprovalRequest,
+    Case,
+    CaseStatus,
+    ExternalApplication,
+    Task,
+    TaskStatus,
+)
 from app.schemas import (
     CaseCreate,
     CaseCreated,
     CaseDetail,
     CaseListResponse,
     CaseStatusFilter,
+    LifeEventCreate,
     SetSubjectRequest,
     TaskInputUpdate,
     TaskResponse,
@@ -70,11 +81,16 @@ def ai_client(request: Request) -> AIClient:
     return request.app.state.ai_client
 
 
+def documents_client(request: Request) -> DocumentsClient:
+    return request.app.state.documents_client
+
+
 AuthDep = Annotated[AuthClient, Depends(auth_client)]
 AuthorityDep = Annotated[AuthorityClient, Depends(authority_client)]
 PublisherDep = Annotated[EventPublisher, Depends(publisher)]
 CatalogDep = Annotated[CatalogClient, Depends(catalog_client)]
 AIDep = Annotated[AIClient, Depends(ai_client)]
+DocumentsDep = Annotated[DocumentsClient, Depends(documents_client)]
 
 
 async def current_user(credentials: CredentialsDep, auth: AuthDep) -> AsyncIterator[UserContext]:
@@ -131,6 +147,139 @@ async def create(
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return case_detail(case, decision)
+
+
+async def _opportunity(
+    benefit: dict,
+    user: UserContext,
+    auth: AuthClient,
+    documents: DocumentsClient,
+) -> dict:
+    profile_response = await auth.profile(user)
+    result = evaluate(
+        benefit,
+        profile_response["profile"],
+        profile_response.get("provenance"),
+    )
+    document_state = await documents.check_requirements(
+        user.user_id, benefit.get("required_documents", [])
+    )
+    return {
+        **benefit,
+        "eligibility": result,
+        "readiness": readiness(benefit, result, document_state),
+        "source": "Matched from your saved profile and document wallet",
+    }
+
+
+@router.get("/benefits/active")
+async def active_benefits(user: UserDep, session: SessionDep, catalog: CatalogDep) -> dict:
+    rows = (
+        await session.scalars(
+            select(ActiveBenefit)
+            .where(ActiveBenefit.user_id == UUID(user.user_id))
+            .order_by(ActiveBenefit.started_at.desc())
+        )
+    ).all()
+    definitions = {item["id"]: item for item in await catalog.benefits()}
+    return {
+        "benefits": [
+            {
+                "benefit_id": row.benefit_id,
+                "name": definitions.get(row.benefit_id, {}).get("name", row.benefit_id),
+                "authority": definitions.get(row.benefit_id, {}).get("authority", ""),
+                "amount": row.amount,
+                "status": row.status,
+                "started_at": row.started_at,
+                "next_payment_at": row.next_payment_at,
+                "case_id": row.source_case_id,
+            }
+            for row in rows
+        ]
+    }
+
+
+@router.get("/benefits/eligible")
+async def eligible_benefits(
+    user: UserDep, auth: AuthDep, catalog: CatalogDep, documents: DocumentsDep
+) -> dict:
+    opportunities = [
+        await _opportunity(benefit, user, auth, documents) for benefit in await catalog.benefits()
+    ]
+    return {
+        "benefits": [
+            item for item in opportunities if item["eligibility"]["status"] != "ineligible"
+        ]
+    }
+
+
+@router.get("/benefits/{benefit_id}/readiness")
+async def benefit_readiness(
+    benefit_id: str,
+    user: UserDep,
+    auth: AuthDep,
+    catalog: CatalogDep,
+    documents: DocumentsDep,
+) -> dict:
+    benefit = await catalog.benefit(benefit_id)
+    if benefit is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Benefit not found")
+    return await _opportunity(benefit, user, auth, documents)
+
+
+@router.post("/benefits/{benefit_id}/apply", status_code=status.HTTP_201_CREATED)
+async def apply_for_benefit(
+    benefit_id: str,
+    user: UserDep,
+    session: SessionDep,
+    auth: AuthDep,
+    events: PublisherDep,
+    authority: AuthorityDep,
+    catalog: CatalogDep,
+    documents: DocumentsDep,
+) -> dict:
+    benefit = await catalog.benefit(benefit_id)
+    if benefit is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Benefit not found")
+    opportunity = await _opportunity(benefit, user, auth, documents)
+    if opportunity["eligibility"]["status"] != "eligible":
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Eligibility is incomplete")
+    if opportunity["readiness"]["percentage"] != 100:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Application is not ready")
+    existing = await session.scalar(
+        select(Case.id).where(
+            Case.life_event_type == f"benefit_{benefit_id}",
+            Case.status.in_([CaseStatus.INTAKE, CaseStatus.ACTIVE]),
+            Case.profile["user_id"].as_string() == user.user_id,
+        )
+    )
+    if existing:
+        raise HTTPException(status.HTTP_409_CONFLICT, "An application is already active")
+    workflow = await catalog.workflow(benefit["workflow_id"])
+    payload = CaseCreate(
+        life_event=LifeEventCreate(
+            type=f"benefit_{benefit_id}",
+            context={
+                "benefit_id": benefit_id,
+                "benefit_name": benefit["name"],
+                "benefit_amount": benefit["amount"],
+                "user_id": user.user_id,
+            },
+        )
+    )
+    try:
+        case, decision = await create_case(
+            session,
+            events,
+            authority,
+            catalog,
+            UUID(user.user_id),
+            payload,
+            definitions=[workflow],
+        )
+    except ConnectionError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+    return {"case": case_detail(case, decision)}
 
 
 @router.get("", response_model=CaseListResponse)

@@ -1,0 +1,38 @@
+benefits:
+  - id: widow_pension
+    name: Widow Pension
+    description: Monthly financial assistance for eligible widowed residents.
+    authority: Department of Women and Child Development, Karnataka
+    amount: ₹1,000 per month
+    eligibility_rules:
+      - {field: gender, operator: eq, value: female}
+      - {field: marital_status, operator: eq, value: widowed}
+      - {field: annual_income, operator: lt, value: 200000}
+      - {field: state, operator: eq, value: Karnataka}
+    required_documents: [aadhaar, death_certificate, income_certificate]
+    workflow_id: widow_pension_application
+
+  - id: sc_st_scholarship
+    name: SC/ST Scholarship
+    description: Education assistance for eligible students from SC and ST communities.
+    authority: Department of Social Welfare, Karnataka
+    amount: Up to ₹50,000 per year
+    eligibility_rules:
+      - {field: caste_category, operator: in, values: [sc, st]}
+      - {field: annual_income, operator: lt, value: 250000}
+      - {field: education_level, operator: in, values: [secondary, undergraduate, postgraduate]}
+      - {field: state, operator: eq, value: Karnataka}
+    required_documents: [aadhaar, caste_certificate, income_certificate, education_certificate]
+    workflow_id: scholarship_application
+
+  - id: senior_pension
+    name: Senior Citizen Pension
+    description: Monthly pension support for eligible senior residents.
+    authority: Revenue Department, Karnataka
+    amount: ₹1,200 per month
+    eligibility_rules:
+      - {field: date_of_birth, operator: age_gte, value: 60}
+      - {field: annual_income, operator: lt, value: 200000}
+      - {field: state, operator: eq, value: Karnataka}
+    required_documents: [aadhaar, age_proof, income_certificate]
+    workflow_id: senior_pension

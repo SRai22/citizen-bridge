@@ -72,6 +72,51 @@ export interface CatalogService {
   stages_known: boolean;
 }
 
+export interface ProfileSource {
+  type: string;
+  reference?: string | null;
+  verified: boolean;
+}
+
+export interface BenefitRuleResult {
+  field: string;
+  operator: string;
+  expected: unknown;
+  actual: unknown;
+  status: "satisfied" | "failed" | "unknown";
+  source: ProfileSource | null;
+}
+
+export interface BenefitOpportunity {
+  id: string;
+  name: string;
+  description: string;
+  authority: string;
+  amount: string;
+  source: string;
+  eligibility: {
+    status: "eligible" | "partially_eligible";
+    rule_results: BenefitRuleResult[];
+    missing_profile_fields: string[];
+  };
+  readiness: {
+    percentage: number;
+    profile: { complete: number; total: number; missing: string[] };
+    documents: { available: string[]; total: number; missing: string[] };
+  };
+}
+
+export interface ActiveBenefit {
+  benefit_id: string;
+  name: string;
+  authority: string;
+  amount: string;
+  status: string;
+  started_at: string;
+  next_payment_at: string | null;
+  case_id: string;
+}
+
 export interface CaseTask {
   task_id: string;
   case_id: string;

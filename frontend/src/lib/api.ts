@@ -1,6 +1,8 @@
 import type {
   AccessLogEntry,
+  ActiveBenefit,
   ApprovalRequest,
+  BenefitOpportunity,
   AuthSession,
   CaseOverview,
   CatalogService,
@@ -165,6 +167,22 @@ export async function confirmIntake(
 
 export function getCatalogServices(): Promise<{ services: CatalogService[] }> {
   return request("/api/catalog/services");
+}
+
+export function getActiveBenefits(signal?: AbortSignal): Promise<{ benefits: ActiveBenefit[] }> {
+  return request("/api/cases/benefits/active", { signal });
+}
+
+export function getBenefitOpportunities(
+  signal?: AbortSignal,
+): Promise<{ benefits: BenefitOpportunity[] }> {
+  return request("/api/cases/benefits/eligible", { signal });
+}
+
+export function applyForBenefit(benefitId: string): Promise<{ case: { case_id: string } }> {
+  return request(`/api/cases/benefits/${encodeURIComponent(benefitId)}/apply`, {
+    method: "POST",
+  });
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -345,4 +363,3 @@ export function getDigest(week?: string): Promise<DigestResponse> {
   const qs = week ? `?week=${encodeURIComponent(week)}` : "";
   return request(`/api/notifications/digest${qs}`);
 }
-

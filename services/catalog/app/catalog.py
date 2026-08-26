@@ -4,7 +4,7 @@ from typing import Any
 
 import yaml
 
-from app.schemas import LifeEventCategory, ServiceDefinition, WorkflowDefinition
+from app.schemas import BenefitDefinition, LifeEventCategory, ServiceDefinition, WorkflowDefinition
 
 
 class Catalog:
@@ -16,9 +16,11 @@ class Catalog:
         categories = _load(self.data_dir / "categories.yaml", "categories")
         services = _load(self.data_dir / "services.yaml", "services")
         workflows = _load(self.data_dir / "workflows.yaml", "workflows")
+        benefits = _load(self.data_dir / "benefits.yaml", "benefits")
         self.categories = _index(LifeEventCategory, categories)
         self.services = _index(ServiceDefinition, services)
         self.workflows = _index(WorkflowDefinition, workflows)
+        self.benefits = _index(BenefitDefinition, benefits)
         self._validate_references()
 
     async def check(self) -> None:
@@ -79,8 +81,7 @@ class Catalog:
             for workflow in self.workflows.values()
             if not workflow.dynamic
             and all(
-                _matches(profile, rule.field, rule.equals)
-                for rule in workflow.applicability_rules
+                _matches(profile, rule.field, rule.equals) for rule in workflow.applicability_rules
             )
         ]
         active_ids = {workflow.id for workflow in applicable}
@@ -92,6 +93,9 @@ class Catalog:
                     + ", ".join(sorted(missing))
                 )
         return applicable
+
+    def list_benefits(self) -> list[dict[str, Any]]:
+        return [benefit.model_dump() for benefit in self.benefits.values()]
 
     def _validate_references(self) -> None:
         referenced_services = {
@@ -106,11 +110,20 @@ class Catalog:
             for workflow in self.workflows.values()
             for dependency in workflow.inter_workflow_dependencies
         } - self.workflows.keys()
-        if missing_services or missing_workflows or missing_dependencies:
+        missing_benefit_workflows = {
+            benefit.workflow_id for benefit in self.benefits.values()
+        } - self.workflows.keys()
+        if (
+            missing_services
+            or missing_workflows
+            or missing_dependencies
+            or missing_benefit_workflows
+        ):
             raise ValueError(
                 "Invalid catalog references: "
                 f"services={sorted(missing_services)}, workflows={sorted(missing_workflows)}, "
-                f"dependencies={sorted(missing_dependencies)}"
+                f"dependencies={sorted(missing_dependencies)}, "
+                f"benefit_workflows={sorted(missing_benefit_workflows)}"
             )
 
 
