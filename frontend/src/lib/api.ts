@@ -11,6 +11,7 @@ import type {
   CitizenCase,
   DigestResponse,
   DeletionStatus,
+  DocCategory,
   DocDetailEntry,
   DocEntry,
   DocumentShare,
@@ -411,6 +412,20 @@ export function getDocuments(
 ): Promise<{ documents_by_category: Record<string, DocEntry[]> }> {
   const qs = category ? `?category=${encodeURIComponent(category)}` : "";
   return request(`/api/docs${qs}`);
+}
+
+export function uploadDocument(payload: {
+  document_type: string;
+  title: string;
+  proof_category: DocCategory;
+  issuer?: string;
+  valid_until?: string;
+}): Promise<DocEntry> {
+  return request<DocEntry>("/api/docs/upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 export function getDocumentDetail(id: string): Promise<DocDetailEntry> {

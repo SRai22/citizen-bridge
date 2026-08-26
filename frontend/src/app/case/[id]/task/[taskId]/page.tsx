@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { ErrorState, LoadingState } from "@/components/page-state";
+import { ErrorState, LoadingState, TimeoutState } from "@/components/page-state";
 import { CoordinatorBanner } from "@/components/coordinator-banner";
 import { RejectionReplan } from "@/components/rejection-replan";
 import { StatusBadge } from "@/components/status-badge";
@@ -166,6 +166,10 @@ export default function TaskDetailPage() {
     (application) => application.status === "rejected" || application.status === "error",
   );
   const failureMessage = latestFailure ? resultError(latestFailure) : null;
+  const successfulApplication = task?.external_applications.findLast((application) => application.status === "approved");
+  const newlyReady = citizenCase && "tasks_by_group" in citizenCase
+    ? citizenCase.tasks_by_group.ready.filter((candidate) => candidate.task_id !== taskId)
+    : [];
 
   return (
     <div className="mx-auto max-w-4xl py-2 sm:py-3">
@@ -215,20 +219,22 @@ export default function TaskDetailPage() {
                   {statusMessage(task.status)}
                 </div>
                 {task.status === "completed" ? (
-                  <div className="mt-5 flex items-start gap-3 rounded-2xl bg-emerald-50 px-4 py-4 text-emerald-900" role="status">
-                    <span className="grid size-7 shrink-0 place-items-center rounded-full bg-emerald-700 text-sm text-white" aria-hidden="true">
-                      ✅
-                    </span>
+                  <div className="completion-highlight mt-5 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-emerald-900" id="receipt" role="status">
+                    <span className="completion-check grid size-7 shrink-0 place-items-center rounded-full bg-emerald-700 text-sm text-white" aria-hidden="true">✓</span>
                     <div>
-                      <p className="text-sm font-bold">Task completed</p>
+                      <p className="text-sm font-bold">{task.title} — Done</p>
                       {task.completed_at ? (
                         <p className="mt-1 text-sm text-emerald-800">
                           Completed {formatDateTime(task.completed_at)}
                         </p>
                       ) : null}
+                      {successfulApplication?.external_reference_id ? <p className="mt-1 text-sm text-emerald-800">Reference: {successfulApplication.external_reference_id}</p> : null}
+                      {task.produced_documents.map((document) => <Link className="mt-2 block text-sm font-bold text-emerald-900 underline-offset-2 hover:underline" href={`/documents/${document.id}`} key={document.id}>Document produced: {titleCase(document.document_type)} →</Link>)}
+                      <a className="mt-2 inline-block text-sm font-bold text-emerald-900 underline-offset-2 hover:underline" href="#receipt">View receipt</a>
                     </div>
                   </div>
                 ) : null}
+                {task.status === "completed" && newlyReady.length ? <section className="mt-5 rounded-2xl border border-teal-200 bg-teal-50 p-4" aria-labelledby="unlocked-heading"><h2 className="font-bold text-teal-950" id="unlocked-heading">This unlocked</h2><ul className="mt-2 space-y-1 text-sm text-teal-900">{newlyReady.map((candidate) => <li key={candidate.task_id}>• <Link className="font-bold hover:underline" href={`/life-events/${id}/task/${candidate.task_id}`}>{candidate.title}</Link> (now ready)</li>)}</ul></section> : null}
                 {notice ? (
                   <p className="mt-5 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800" role="status">
                     {notice}
@@ -236,12 +242,13 @@ export default function TaskDetailPage() {
                 ) : null}
                 {failureMessage ? (
                   <>
+                    {latestFailure?.status === "error" ? <div className="mt-5"><TimeoutState system="The government system" /></div> : null}
                     <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-rose-900" role="alert">
                       <p className="text-sm font-bold">Submission needs attention</p>
                       <p className="mt-1 text-sm leading-6">{failureMessage}</p>
                     </div>
                     {task.status === "failed" && latestFailure?.status === "rejected" ? (
-                      <RejectionReplan caseId={id} taskId={taskId} />
+                      <RejectionReplan caseId={id} taskId={taskId} taskName={task.title} />
                     ) : null}
                   </>
                 ) : null}

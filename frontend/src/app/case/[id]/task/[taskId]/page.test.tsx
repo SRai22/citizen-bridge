@@ -176,12 +176,12 @@ test("explains a rejection and accepts the proposed remediation", async () => {
 
   expect(await screen.findByText("Submission needs attention")).toBeInTheDocument();
   expect(screen.getByText("A Legal Heir Certificate is required.")).toBeInTheDocument();
-  expect(await screen.findByRole("heading", { name: "System Analysis" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "What happened" })).toBeInTheDocument();
   expect(await screen.findByText(interpretation.explanation)).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Proposed Action" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "What you can do" })).toBeInTheDocument();
   expect(screen.getByText(/Obtain Legal Heir Certificate/)).toBeInTheDocument();
 
-  fireEvent.click(screen.getByRole("button", { name: "Accept Recommendation" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add this to my plan" }));
 
   await waitFor(() => expect(push).toHaveBeenCalledWith("/case/case-12345678"));
   const acceptance = fetchMock.mock.calls.find(([input]) =>
@@ -215,16 +215,38 @@ test("dismisses the recommendation without changing the failed task", async () =
   });
 
   render(<TaskDetailPage />);
-  await screen.findByRole("heading", { name: "Proposed Action" });
+  await screen.findByRole("heading", { name: "What you can do" });
   fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
 
-  expect(screen.queryByRole("heading", { name: "System Analysis" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("heading", { name: "Proposed Action" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "What happened" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "What you can do" })).not.toBeInTheDocument();
   expect(screen.getByText("A Legal Heir Certificate is required.")).toBeInTheDocument();
   expect(
     fetchMock.mock.calls.some(([input]) => String(input).endsWith("/accept-remediation")),
   ).toBe(false);
   expect(push).not.toHaveBeenCalled();
+});
+
+test("shows a completion receipt with reference and produced document", async () => {
+  const completedTask: TaskDetail = {
+    ...readyDeathTask,
+    status: "completed",
+    completed_at: "2026-08-25T12:00:00Z",
+    external_applications: [approvedApplication],
+    produced_documents: [deathCertificate],
+  };
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = String(input);
+    if (url.endsWith("/requirements")) return Response.json([]);
+    return Response.json(url.endsWith("/tasks/task-pension") ? completedTask : citizenCase);
+  });
+
+  render(<TaskDetailPage />);
+
+  expect(await screen.findByText(`${completedTask.title} — Done`)).toBeInTheDocument();
+  expect(screen.getByText(`Reference: ${approvedApplication.external_reference_id}`)).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Document produced: Death Certificate →" })).toHaveAttribute("href", `/documents/${deathCertificate.id}`);
+  expect(screen.getByRole("link", { name: "View receipt" })).toHaveAttribute("href", "#receipt");
 });
 
 test("shows remediation documents as missing and names their producer task", async () => {

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { ErrorState, LoadingState } from "@/components/page-state";
+import { EmptyState, ErrorState, LoadingState } from "@/components/page-state";
 import {
   ApiError,
   applyForBenefit,
@@ -96,11 +96,11 @@ export default function BenefitsPage() {
             ))}
           </ul>
         ) : (
-          <p className="mt-3 rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">You do not have any active benefits yet. Ready applications will appear below.</p>
+          <div className="mt-3"><EmptyState title="No active benefits yet" description="You're not receiving any tracked benefits yet. Benefits you apply for through the platform will appear here." action={{ label: "Discover benefits →", href: "/benefits#benefit-opportunities" }} /></div>
         )}
       </section>
 
-      <section className="mt-8" aria-labelledby="benefit-opportunities">
+      <section className="mt-8" aria-labelledby="benefit-opportunities" id="benefit-opportunities">
         <h2 id="benefit-opportunities" className="text-xl font-bold text-slate-950">Opportunities for you</h2>
         {opportunities.length ? (
           <ul className="mt-3 space-y-4">
@@ -109,11 +109,7 @@ export default function BenefitsPage() {
             ))}
           </ul>
         ) : (
-          <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-6">
-            <p className="font-bold text-slate-950">No matches yet</p>
-            <p className="mt-1 text-sm text-slate-600">Add more profile details so we can check additional schemes.</p>
-            <Link className="mt-4 inline-block text-sm font-bold text-teal-700" href="/onboarding">Complete your profile →</Link>
-          </div>
+          <div className="mt-3"><EmptyState title="Complete your profile to find matches" description="Tell us a bit more about yourself to discover benefits you may qualify for, including income-based support." action={{ label: "Complete profile", href: "/onboarding" }} /></div>
         )}
       </section>
     </div>

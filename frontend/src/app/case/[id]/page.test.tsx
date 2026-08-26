@@ -79,6 +79,27 @@ test("shows a retryable error when the gateway is unavailable", async () => {
 
   render(<CaseOverviewPage />);
 
-  expect(await screen.findByRole("heading", { name: "We couldn't load this page" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Something went wrong" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+});
+
+test("summarizes a fully completed case", async () => {
+  const completedTask = { ...citizenCase.tasks_by_group.ready[0], status: "completed" as const, completed_at: "2026-08-25T12:00:00Z" };
+  const completedCase: CaseOverview = {
+    ...citizenCase,
+    status: "completed",
+    progress: { completed: 1, total: 1 },
+    tasks_by_group: { ready: [], waiting: [], blocked: [], completed: [completedTask] },
+  };
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    if (String(input).endsWith("/api/docs")) return Response.json({ documents_by_category: { certificates: [{ id: "doc-1", title: "Death Certificate", source_case_id: citizenCase.case_id }] } });
+    return Response.json(completedCase);
+  });
+
+  render(<CaseOverviewPage />);
+
+  expect(await screen.findByRole("heading", { name: "All done!" })).toBeInTheDocument();
+  expect(screen.getByText("Death Certificate")).toBeInTheDocument();
+  expect(screen.getByText("• Obtain Death Certificate")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Back to My Services" })).toHaveAttribute("href", "/");
 });

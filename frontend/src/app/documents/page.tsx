@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 import { ProvenanceTag } from "@/components/provenance-tag";
-import { ErrorState, LoadingState } from "@/components/page-state";
-import { ApiError, getDocuments } from "@/lib/api";
+import { EmptyState, ErrorState, ExpiredDocumentState, LoadingState } from "@/components/page-state";
+import { ApiError, getDocuments, uploadDocument } from "@/lib/api";
 import { formatDate } from "@/lib/presentation";
 import type { DocCategory, DocEntry } from "@/types/api";
 
@@ -21,6 +21,8 @@ export default function DocumentsPage() {
   const [groups, setGroups] = useState<Record<string, DocEntry[]> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -49,6 +51,30 @@ export default function DocumentsPage() {
 
   const totalDocs = Object.values(groups).flat().length;
 
+  async function upload(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    setUploading(true);
+    setUploadError(null);
+    try {
+      await uploadDocument({
+        title: String(values.get("title")),
+        document_type: String(values.get("document_type")),
+        proof_category: String(values.get("proof_category")) as DocCategory,
+        issuer: String(values.get("issuer")) || undefined,
+        valid_until: values.get("valid_until") ? `${String(values.get("valid_until"))}T00:00:00` : undefined,
+      });
+      form.reset();
+      setGroups(null);
+      setAttempt((value) => value + 1);
+    } catch (reason) {
+      setUploadError(reason instanceof ApiError ? reason.message : "Could not add this document.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-5xl py-2 sm:py-3">
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
@@ -60,19 +86,7 @@ export default function DocumentsPage() {
       </section>
 
       {totalDocs === 0 ? (
-        <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-10 text-center">
-          <p className="text-lg font-bold text-slate-950">No documents yet</p>
-          <p className="mt-2 text-sm text-slate-500">
-            Documents appear here as you complete services. You can also upload existing documents to
-            reuse across services.
-          </p>
-          <button
-            className="mt-6 rounded-xl bg-teal-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-teal-800"
-            type="button"
-          >
-            Upload a document
-          </button>
-        </section>
+        <div className="mt-8"><EmptyState title="Keep reusable documents together" description="Documents will appear here as you use services. You can also upload your existing documents." action={{ label: "Upload a document", href: "/documents#upload" }} /></div>
       ) : (
         <div className="mt-8 space-y-8">
           {(Object.keys(CATEGORY_META) as DocCategory[]).map((cat) => {
@@ -97,11 +111,26 @@ export default function DocumentsPage() {
           })}
         </div>
       )}
+      <details className="mt-8 rounded-2xl border border-teal-200 bg-teal-50 p-5" id="upload" open>
+        <summary className="cursor-pointer font-bold text-teal-900">Upload an existing document</summary>
+        {uploadError ? <p className="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-800" role="alert">{uploadError} Please review the details and try again.</p> : null}
+        <form className="mt-5 grid gap-4 sm:grid-cols-2" onSubmit={upload}>
+          <label className="text-sm font-semibold text-slate-700">Document name<input className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" name="title" required /></label>
+          <label className="text-sm font-semibold text-slate-700">Document type<input className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" name="document_type" placeholder="e.g. voter_id" required /></label>
+          <label className="text-sm font-semibold text-slate-700">Category<select className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" name="proof_category">{(Object.keys(CATEGORY_META) as DocCategory[]).map((category) => <option key={category} value={category}>{CATEGORY_META[category].label}</option>)}</select></label>
+          <label className="text-sm font-semibold text-slate-700">Issuer (optional)<input className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" name="issuer" /></label>
+          <label className="text-sm font-semibold text-slate-700">Valid until (optional)<input className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" name="valid_until" type="date" /></label>
+          <button className="self-end rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60" disabled={uploading} type="submit">{uploading ? "Adding…" : "Add document"}</button>
+        </form>
+      </details>
     </div>
   );
 }
 
 function DocumentCard({ doc }: { doc: DocEntry }) {
+  if (doc.verification_status === "expired") {
+    return <li><ExpiredDocumentState documentName={doc.title} expired={doc.valid_until ? formatDate(doc.valid_until) : "before today"} /></li>;
+  }
   return (
     <li className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex items-start justify-between gap-3">
@@ -152,4 +181,3 @@ function VerificationBadge({ status }: { status: DocEntry["verification_status"]
     </span>
   );
 }
-

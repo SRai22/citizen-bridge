@@ -10,6 +10,21 @@ from app.models import AIRequestLog, Conversation
 from app.provider import AIProvider
 
 
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("Please continue", "Certainly."),
+        ("just tell me what to do", "keep this direct"),
+        ("why do you need that?", "This helps us"),
+        ("my dad died last week", "I'm sorry to hear that"),
+    ],
+)
+def test_mock_intake_adapts_to_the_citizens_style(message: str, expected: str) -> None:
+    reply = AIProvider._mock_reply(message, "Which city did they live in?")
+    assert expected in reply
+    assert reply.endswith("Which city did they live in?")
+
+
 def auth(user_id) -> dict[str, str]:
     return {"Authorization": f"Bearer {user_id}"}
 

@@ -10,13 +10,14 @@ import type { RejectionInterpretation } from "@/types/api";
 interface RejectionReplanProps {
   caseId: string;
   taskId: string;
+  taskName: string;
 }
 
 function errorMessage(reason: unknown): string {
   return reason instanceof ApiError ? reason.message : "Something unexpected went wrong.";
 }
 
-export function RejectionReplan({ caseId, taskId }: RejectionReplanProps) {
+export function RejectionReplan({ caseId, taskId, taskName }: RejectionReplanProps) {
   const router = useRouter();
   const [interpretation, setInterpretation] = useState<RejectionInterpretation | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,11 +54,9 @@ export function RejectionReplan({ caseId, taskId }: RejectionReplanProps) {
   return (
     <div className="mt-4 space-y-4">
       <section className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4" aria-labelledby="system-analysis-heading">
-        <p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-800">
-          Citizen Bridge AI
-        </p>
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-800">⚠️ {taskName} was not successful</p>
         <h2 id="system-analysis-heading" className="mt-1 text-base font-bold text-slate-950">
-          System Analysis
+          What happened
         </h2>
         {interpretation ? (
           <p className="mt-2 text-sm leading-6 text-slate-700">{interpretation.explanation}</p>
@@ -83,7 +82,7 @@ export function RejectionReplan({ caseId, taskId }: RejectionReplanProps) {
       {interpretation ? (
         <section className="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-4" aria-labelledby="proposed-action-heading">
           <h2 id="proposed-action-heading" className="text-base font-bold text-slate-950">
-            Proposed Action
+            What you can do
           </h2>
           <p className="mt-2 text-sm leading-6 text-slate-700">
             Add “Obtain {titleCase(interpretation.remediation.workflow_id)}” to your plan and make it a prerequisite for this task.
@@ -96,7 +95,7 @@ export function RejectionReplan({ caseId, taskId }: RejectionReplanProps) {
               onClick={handleAccept}
               type="button"
             >
-              {accepting ? "Updating your plan…" : "Accept Recommendation"}
+              {accepting ? "Updating your plan…" : "Add this to my plan"}
             </button>
             <button
               className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-white hover:text-slate-950 disabled:opacity-50"
@@ -106,6 +105,7 @@ export function RejectionReplan({ caseId, taskId }: RejectionReplanProps) {
             >
               Dismiss
             </button>
+            <a className="rounded-xl px-4 py-2.5 text-sm font-bold text-teal-800 hover:bg-white" href="mailto:support@citizenbridge.in">I need help with this</a>
           </div>
         </section>
       ) : null}

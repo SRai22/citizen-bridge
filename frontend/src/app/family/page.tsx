@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
-import { ErrorState, LoadingState } from "@/components/page-state";
+import { EmptyState, ErrorState, LoadingState } from "@/components/page-state";
 import { ApiError, addFamilyMember, getCaseOverview, getCases, getFamily, removeFamilyMember, updateFamilyMember } from "@/lib/api";
 import { formatDate } from "@/lib/presentation";
 import type { CaseOverview, FamilyMember } from "@/types/api";
@@ -99,8 +99,8 @@ export default function FamilyPage() {
             );
           })}
         </ul>
-      ) : <p className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">Your family members will appear here as you use services involving them. You can also add them manually.</p>}
-      <details className="mt-6 rounded-2xl border border-teal-200 bg-teal-50 p-5" open={!members.length}>
+      ) : <div className="mt-8"><EmptyState title="Add people you help" description="Add family members when you need to manage services involving them. You can also add them anytime." action={{ label: "+ Add family member", href: "/family#add-family" }} /></div>}
+      <details className="mt-6 rounded-2xl border border-teal-200 bg-teal-50 p-5" id="add-family" open={!members.length}>
         <summary className="cursor-pointer font-bold text-teal-900">+ Add a family member</summary>
         <MemberForm onSubmit={(event) => void add(event)} />
       </details>

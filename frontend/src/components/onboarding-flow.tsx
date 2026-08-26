@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { ApiError, getSession, register, updateProfile } from "@/lib/api";
+import { InlineFieldError } from "@/components/page-state";
 
 const STORAGE_KEY = "citizen-bridge:onboarding";
 const MOCK_OTP = "123456";
@@ -107,7 +108,7 @@ export function OnboardingFlow() {
         </header>
 
         <div className="px-6 py-8 sm:px-9 sm:py-10">
-          {error ? (
+          {error && !error.includes("10-digit") && !error.includes("12-digit") ? (
             <p className="mb-5 rounded-xl bg-rose-50 p-3 text-sm text-rose-800" role="alert">
               {error}
             </p>
@@ -150,6 +151,7 @@ export function OnboardingFlow() {
               otp={otp}
               otpSent={otpSent}
               phone={phone}
+              phoneError={error?.includes("10-digit") ? error : null}
               setPhone={setPhone}
               verifying={busy}
             />
@@ -183,6 +185,7 @@ export function OnboardingFlow() {
           {step === 3 ? (
             <AadhaarStep
               aadhaar={aadhaar}
+              aadhaarError={error?.includes("12-digit") ? error : null}
               linked={aadhaarLinked}
               onAadhaarChange={setAadhaar}
               onBack={() => setStep(2)}
@@ -224,6 +227,7 @@ function Welcome({ onContinue }: { onContinue: () => void }) {
 
 function PhoneStep(props: {
   phone: string;
+  phoneError: string | null;
   setPhone: (value: string) => void;
   otp: string;
   onOtpChange: (value: string) => void;
@@ -244,9 +248,11 @@ function PhoneStep(props: {
       <label className="mt-6 block text-sm font-bold text-slate-800" htmlFor="phone">
         Mobile number
       </label>
-      <div className="mt-2 flex rounded-xl border border-slate-300 bg-white focus-within:border-teal-600 focus-within:ring-2 focus-within:ring-teal-100">
+      <div className={`mt-2 flex rounded-xl border bg-white focus-within:ring-2 ${props.phoneError ? "border-rose-500 focus-within:ring-rose-100" : "border-slate-300 focus-within:border-teal-600 focus-within:ring-teal-100"}`}>
         <span className="grid px-4 text-slate-500" style={{ placeItems: "center" }}>+91</span>
         <input
+          aria-describedby={props.phoneError ? "phone-error" : undefined}
+          aria-invalid={Boolean(props.phoneError)}
           autoComplete="tel-national"
           className="min-w-0 flex-1 rounded-r-xl px-3 py-3.5 outline-none"
           id="phone"
@@ -256,6 +262,7 @@ function PhoneStep(props: {
           value={props.phone}
         />
       </div>
+      {props.phoneError ? <InlineFieldError id="phone-error">Please enter a valid 10-digit phone number.</InlineFieldError> : null}
       {!props.otpSent ? (
         <PrimaryButton onClick={props.onSend}>Send OTP</PrimaryButton>
       ) : (
@@ -321,6 +328,7 @@ function ProfileStep(props: {
 
 function AadhaarStep(props: {
   aadhaar: string;
+  aadhaarError: string | null;
   linked: boolean;
   onAadhaarChange: (value: string) => void;
   onLink: () => void;
@@ -344,7 +352,8 @@ function AadhaarStep(props: {
       ) : (
         <>
           <label className={labelClass} htmlFor="aadhaar">Aadhaar number</label>
-          <input className={inputClass} id="aadhaar" inputMode="numeric" maxLength={14} onChange={(event) => props.onAadhaarChange(event.target.value)} placeholder="XXXX XXXX XXXX" value={props.aadhaar} />
+          <input aria-describedby={props.aadhaarError ? "aadhaar-error" : undefined} aria-invalid={Boolean(props.aadhaarError)} className={`${inputClass} ${props.aadhaarError ? "border-rose-500 focus:border-rose-500 focus:ring-rose-100" : ""}`} id="aadhaar" inputMode="numeric" maxLength={14} onChange={(event) => props.onAadhaarChange(event.target.value)} placeholder="XXXX XXXX XXXX" value={props.aadhaar} />
+          {props.aadhaarError ? <InlineFieldError id="aadhaar-error">Please enter a valid 12-digit Aadhaar number.</InlineFieldError> : null}
           <PrimaryButton onClick={props.onLink}>Link Aadhaar</PrimaryButton>
         </>
       )}

@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { IntakeChat } from "@/components/intake-chat";
-import { ErrorState, LoadingState } from "@/components/page-state";
-import { ApiError, getCatalogServices, getCategories, getSession } from "@/lib/api";
+import { EmptyState, ErrorState, LoadingState } from "@/components/page-state";
+import { ApiError, getCases, getCatalogServices, getCategories, getSession } from "@/lib/api";
 import type { AuthSession, CatalogService, LifeEventCategory } from "@/types/api";
 
 const serviceGroups = [
@@ -27,11 +27,13 @@ export function ServicesHome() {
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [activeCases, setActiveCases] = useState(0);
+  const [showTip, setShowTip] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
-    Promise.all([getSession(controller.signal), getCategories(), getCatalogServices()])
-      .then(([currentSession, categoryResponse, serviceResponse]) => {
+    Promise.all([getSession(controller.signal), getCategories(), getCatalogServices(), getCases(controller.signal)])
+      .then(([currentSession, categoryResponse, serviceResponse, caseResponse]) => {
         if (!currentSession.name || !currentSession.date_of_birth || !currentSession.city) {
           router.replace("/onboarding");
           return;
@@ -39,6 +41,13 @@ export function ServicesHome() {
         setSession(currentSession);
         setCategories(categoryResponse.categories);
         setServices(serviceResponse.services);
+        const active = caseResponse.cases.filter((item) => item.status !== "completed" && item.status !== "abandoned").length;
+        setActiveCases(active);
+        const tipKey = "citizen-bridge:home-tip-seen";
+        if (active === 0 && !localStorage.getItem(tipKey)) {
+          setShowTip(true);
+          localStorage.setItem(tipKey, "true");
+        }
       })
       .catch((reason: unknown) => {
         if (reason instanceof Error && reason.name === "AbortError") return;
@@ -96,10 +105,12 @@ export function ServicesHome() {
       <section className="mt-8" aria-labelledby="start-service-heading">
         <p className="text-sm font-bold uppercase tracking-[0.16em] text-teal-700">Start a service</p>
         <h2 className="mt-1 text-2xl font-bold text-slate-950" id="start-service-heading">What changed in your life?</h2>
+        {activeCases === 0 ? <div className="mt-5"><EmptyState title="Browse services by life situation" description="Browse government services organized by life situation. Start when you need help." action={{ label: "Browse services", href: "/#service-options" }} /></div> : null}
+        {showTip ? <aside className="mt-5 flex items-start justify-between gap-4 rounded-2xl border border-cyan-200 bg-cyan-50 p-4 text-sm leading-6 text-cyan-950"><p>💡 <strong>Tip:</strong> Choose a life situation below to see how we can help. Most citizens start with something specific, such as family paperwork or applying for a benefit.</p><button aria-label="Dismiss tip" className="shrink-0 font-bold" onClick={() => setShowTip(false)} type="button">×</button></aside> : null}
         {visibleCategories.length ? (
-          <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4" id="service-options">
             {visibleCategories.map((category) => (
-              <button className="group min-h-48 rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-teal-500 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700" key={category.id} onClick={() => setSelected(category)} type="button">
+              <button className="group min-h-48 rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-teal-500 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700" key={category.id} onClick={() => { setShowTip(false); setSelected(category); }} type="button">
                 <CategoryIcon name={category.icon} small />
                 <span className="mt-4 block text-base font-bold text-slate-950 group-hover:text-teal-800 sm:text-lg">{category.title}</span>
                 <span className="mt-2 block text-xs leading-5 text-slate-600 sm:text-sm">{category.subtitle}</span>

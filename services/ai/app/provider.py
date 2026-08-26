@@ -78,16 +78,24 @@ class AIProvider:
     ) -> ProviderResult:
         if self.settings.ai_mock_mode:
             user_turns = sum(message.get("role") == "user" for message in messages)
+            latest = next(
+                (
+                    message.get("content", "")
+                    for message in reversed(messages)
+                    if message.get("role") == "user"
+                ),
+                "",
+            )
             value = (
                 IntakeTurn(
                     status="complete",
-                    message="Thank you. I have enough information to prepare your service plan.",
+                    message="I have everything I need. Here's a summary of what we'll handle:",
                     profile=MOCK_PROFILE,
                 )
                 if user_turns >= 4
                 else IntakeTurn(
                     status="in_progress",
-                    message=MOCK_QUESTIONS[max(0, user_turns - 1)],
+                    message=self._mock_reply(latest, MOCK_QUESTIONS[max(0, user_turns - 1)]),
                 )
             )
             return ProviderResult(value=value, model="mock")
@@ -105,6 +113,24 @@ class AIProvider:
             self.settings.intake_input_cost_per_million,
             self.settings.intake_output_cost_per_million,
         )
+
+    @staticmethod
+    def _mock_reply(message: str, question: str) -> str:
+        lowered = message.lower()
+        if "just tell me" in lowered or "stop asking" in lowered:
+            return f"Understood — I'll keep this direct. {question}"
+        if "?" in message or lowered.startswith("why"):
+            return (
+                "This helps us identify the right services and avoid irrelevant steps. "
+                f"{question}"
+            )
+        if any(word in lowered for word in ("died", "passed away", "loss")):
+            return f"I'm sorry to hear that. {question}"
+        if any(word in lowered for word in ("please", "kindly", "could you")):
+            return f"Certainly. {question}"
+        if len(message.split()) <= 3:
+            return question
+        return f"Thank you for that context. {question}"
 
     async def interpret(self, rejection_text: str, context: Mapping[str, Any]) -> ProviderResult:
         if self.settings.ai_mock_mode:

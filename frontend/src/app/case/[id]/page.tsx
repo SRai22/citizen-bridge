@@ -9,9 +9,9 @@ import { CoordinatorBanner } from "@/components/coordinator-banner";
 import { ErrorState, LoadingState } from "@/components/page-state";
 import { StatusBadge } from "@/components/status-badge";
 import { WaitingState } from "@/components/waiting-state";
-import { ApiError, getCaseOverview } from "@/lib/api";
+import { ApiError, getCaseOverview, getDocuments } from "@/lib/api";
 import { formatDate, formatDateTime } from "@/lib/presentation";
-import type { CaseOverview, CaseTask } from "@/types/api";
+import type { CaseOverview, CaseTask, DocEntry } from "@/types/api";
 
 export default function CaseOverviewPage() {
   const { id } = useParams<{ id: string }>();
@@ -19,11 +19,22 @@ export default function CaseOverviewPage() {
   const [graphOpen, setGraphOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [documents, setDocuments] = useState<DocEntry[]>([]);
 
   useEffect(() => {
     const controller = new AbortController();
     getCaseOverview(id, controller.signal)
-      .then(setCitizenCase)
+      .then(async (loadedCase) => {
+        setCitizenCase(loadedCase);
+        if (loadedCase.status === "completed" || (loadedCase.progress.total > 0 && loadedCase.progress.completed === loadedCase.progress.total)) {
+          try {
+            const response = await getDocuments();
+            setDocuments(Object.values(response.documents_by_category).flat().filter((document) => document.source_case_id === id));
+          } catch {
+            setDocuments([]);
+          }
+        }
+      })
       .catch((reason: unknown) => {
         if (reason instanceof Error && reason.name === "AbortError") return;
         setError(reason instanceof ApiError ? reason.message : "Something unexpected went wrong.");
@@ -41,6 +52,7 @@ export default function CaseOverviewPage() {
     status: task.status,
     dependencies: task.blocked_by_task_ids.map((taskId) => ({ depends_on_task_id: taskId })),
   }));
+  const complete = citizenCase?.status === "completed" || (Boolean(citizenCase?.progress.total) && citizenCase?.progress.completed === citizenCase?.progress.total);
 
   if (error) {
     return <ErrorState message={error} onRetry={() => { setError(null); setCitizenCase(null); setAttempt((value) => value + 1); }} />;
@@ -66,6 +78,8 @@ export default function CaseOverviewPage() {
           <div className="h-full rounded-full bg-teal-600" style={{ width: `${citizenCase.progress.total ? (citizenCase.progress.completed / citizenCase.progress.total) * 100 : 0}%` }} />
         </div>
       </section>
+
+      {complete ? <section className="mt-8 rounded-3xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm sm:p-8" aria-labelledby="case-complete-heading"><span aria-hidden="true" className="completion-check grid size-12 place-items-center rounded-full bg-emerald-700 text-2xl text-white">✓</span><h2 className="mt-4 text-2xl font-bold text-emerald-950" id="case-complete-heading">All done!</h2><p className="mt-2 text-lg font-semibold text-emerald-950">{citizenCase.title}</p><p className="mt-1 text-sm text-emerald-900">All {citizenCase.progress.total} tasks completed. One less thing to worry about.</p>{documents.length ? <div className="mt-5"><h3 className="font-bold text-emerald-950">Documents obtained</h3><ul className="mt-2 space-y-1 text-sm text-emerald-900">{documents.map((document) => <li key={document.id}>• <Link className="font-semibold hover:underline" href={`/documents/${document.id}`}>{document.title}</Link></li>)}</ul></div> : null}<div className="mt-5"><h3 className="font-bold text-emerald-950">Services completed</h3><ul className="mt-2 space-y-1 text-sm text-emerald-900">{citizenCase.tasks_by_group.completed.map((task) => <li key={task.task_id}>• {task.title}</li>)}</ul></div><p className="mt-5 text-sm text-emerald-900">Everything is saved in your Documents and Activity sections.</p><Link className="mt-6 inline-flex rounded-xl bg-emerald-800 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-900" href="/">Back to My Services</Link></section> : null}
 
       {!allTasks.length ? (
         <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-10 text-center">

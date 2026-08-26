@@ -12,6 +12,7 @@ interface ChatMessage {
   id: number;
   role: "user" | "system";
   content: string;
+  action?: { label: string; href: string };
 }
 
 export function IntakeChat({ categoryId }: { categoryId: string }) {
@@ -54,6 +55,12 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
     setMessage("");
     setError(null);
     setBusy(true);
+    const redirect = boundaryRedirect(content);
+    if (redirect) {
+      setMessages((current) => [...current, { id: nextMessageId.current++, role: "system", ...redirect }]);
+      setBusy(false);
+      return;
+    }
     try {
       const response = await sendIntakeMessage(sessionId, content);
       const systemMessage = {
@@ -130,15 +137,16 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
             className={`flex ${chatMessage.role === "user" ? "justify-end" : "justify-start"}`}
             key={chatMessage.id}
           >
-            <p
+            <div
               className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm sm:max-w-[70%] ${
                 chatMessage.role === "user"
                   ? "rounded-br-md bg-teal-800 text-white"
                   : "rounded-bl-md border border-stone-200 bg-white text-slate-700"
               }`}
             >
-              {chatMessage.content}
-            </p>
+              <p>{chatMessage.content}</p>
+              {chatMessage.action ? <a className="mt-2 inline-block font-bold text-teal-800 underline-offset-2 hover:underline" href={chatMessage.action.href}>{chatMessage.action.label} →</a> : null}
+            </div>
           </div>
         ))}
         {busy ? (
@@ -199,4 +207,12 @@ function messageFor(reason: unknown): string {
   return reason instanceof ApiError
     ? reason.message
     : "Something unexpected went wrong. Please try again.";
+}
+
+function boundaryRedirect(message: string): Pick<ChatMessage, "content" | "action"> | null {
+  const value = message.toLocaleLowerCase();
+  if (/\b(task|application) (status|update)\b/.test(value)) return { content: "You can see the latest status and next step in Active Life Events.", action: { label: "Open Active Life Events", href: "/life-events" } };
+  if (/\b(document|certificate)s?\b/.test(value) && /\b(upload|manage|find|where|view)\b/.test(value)) return { content: "My Documents is the right place to view, add, or manage documents.", action: { label: "Open My Documents", href: "/documents" } };
+  if (/\b(setting|account|privacy|password)s?\b/.test(value)) return { content: "You'll find account and privacy controls in Settings.", action: { label: "Open Settings", href: "/settings/data-controls" } };
+  return null;
 }

@@ -19,3 +19,21 @@ button,
 a {
   -webkit-tap-highlight-color: transparent;
 }
+
+@keyframes completion-check {
+  from { transform: scale(0.7); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes completion-highlight {
+  from { box-shadow: 0 0 0 4px rgb(16 185 129 / 22%); }
+  to { box-shadow: 0 0 0 0 transparent; }
+}
+
+.completion-check { animation: completion-check 200ms ease-out; }
+.completion-highlight { animation: completion-highlight 1s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .completion-check,
+  .completion-highlight { animation: none; }
+}

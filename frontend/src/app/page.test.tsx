@@ -46,6 +46,9 @@ test("loads the signed-in user's service categories and starts intake", async ()
     if (url.endsWith("/api/catalog/services")) {
       return Promise.resolve(Response.json({ services: [] }));
     }
+    if (url.endsWith("/api/cases")) {
+      return Promise.resolve(Response.json({ cases: [] }));
+    }
     if (url.endsWith("/api/intake/start")) {
       return Promise.resolve(Response.json({
         conversation_id: "intake-1",
