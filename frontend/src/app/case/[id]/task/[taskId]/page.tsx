@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { ErrorState, LoadingState } from "@/components/page-state";
+import { CoordinatorBanner } from "@/components/coordinator-banner";
 import { RejectionReplan } from "@/components/rejection-replan";
 import { StatusBadge } from "@/components/status-badge";
 import { TaskSubmissionForm } from "@/components/task-submission-form";
@@ -190,6 +191,9 @@ export default function TaskDetailPage() {
             >
               <span aria-hidden="true">←</span> Back to case
             </Link>
+            {"tasks_by_group" in citizenCase ? (
+              <div className="mt-4"><CoordinatorBanner citizenCase={citizenCase} /></div>
+            ) : null}
 
             <article className="mt-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
               <header className="border-b border-slate-200 p-6 sm:p-8">
@@ -330,6 +334,8 @@ export default function TaskDetailPage() {
                 </section>
               </div>
 
+              <AuthorityLimitationNotice citizenCase={citizenCase} taskStatus={task.status} />
+
               <TaskSubmissionForm
                 busy={busyAction === "prepare"}
                 error={actionError}
@@ -368,5 +374,47 @@ export default function TaskDetailPage() {
           </>
         ) : null}
     </div>
+  );
+}
+
+function AuthorityLimitationNotice({
+  citizenCase,
+  taskStatus,
+}: {
+  citizenCase: CaseOverview | CitizenCase;
+  taskStatus: string;
+}) {
+  if (!("tasks_by_group" in citizenCase)) return null;
+  if (citizenCase.my_role !== "coordinator") return null;
+  if (!citizenCase.limitations.length) return null;
+  if (taskStatus !== "ready" && taskStatus !== "in_progress") return null;
+
+  const subject = citizenCase.subject;
+  return (
+    <section
+      aria-label="Authority limitations"
+      className="border-t border-amber-100 bg-amber-50 p-6 sm:p-8"
+    >
+      <div className="flex items-start gap-3">
+        <span aria-hidden="true" className="mt-0.5 shrink-0 text-xl">⚠️</span>
+        <div>
+          <p className="font-bold text-amber-900">
+            Some actions require {subject ? subject.name : "the person"} or their legal guardian
+          </p>
+          <p className="mt-2 text-sm leading-6 text-amber-800">
+            As Case Coordinator you can gather documents, prepare information, and track progress.
+            The following require the person or their legal guardian directly:{" "}
+            <span className="font-medium">{citizenCase.limitations.join("; ")}</span>.
+          </p>
+          {subject ? (
+            <p className="mt-3 text-sm text-amber-700">
+              You&apos;re helping{" "}
+              <span className="font-medium">{subject.name}</span> ({subject.relationship}).
+              If they can&apos;t act themselves, a legal guardian can act on their behalf.
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </section>
   );
 }

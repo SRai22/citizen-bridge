@@ -5,6 +5,7 @@ import type {
   BenefitOpportunity,
   AuthSession,
   CaseOverview,
+  CaseListItem,
   CatalogService,
   CitizenCase,
   DigestResponse,
@@ -12,6 +13,7 @@ import type {
   DocEntry,
   DocumentRequirement,
   ExternalApplication,
+  FamilyMember,
   IntakeConfirmation,
   IntakeHouseholdProfile,
   IntakeResponse,
@@ -103,6 +105,7 @@ export function sendIntakeMessage(
 export async function confirmIntake(
   sessionId: string,
   categoryId: string,
+  subject: "self" | FamilyMember | null = null,
 ): Promise<IntakeConfirmation> {
   const { profile } = await request<{ profile: IntakeHouseholdProfile }>(
     `/api/intake/${encodeURIComponent(sessionId)}/confirm`, {
@@ -111,6 +114,28 @@ export async function confirmIntake(
     body: JSON.stringify({ profile_confirmed: true }),
   });
   const bereavement = categoryId === "bereavement";
+  const profilePeople = [profile.deceased, ...profile.surviving_members];
+  const savedFamily = bereavement
+    ? await Promise.all(
+        profilePeople.map((person, index) =>
+          addFamilyMember({
+            name: person.name,
+            relationship: person.relationship,
+            is_deceased: index === 0,
+            source: "intake",
+          }),
+        ),
+      )
+    : [];
+  const selected = subject && subject !== "self" ? subject : null;
+  const people = selected && !profilePeople.some((person) => person.name === selected.name)
+    ? [...profilePeople, selected]
+    : profilePeople;
+  const subjectIndex = bereavement
+    ? 0
+    : selected
+      ? people.findIndex((person) => person.name === selected.name)
+      : null;
   return request<IntakeConfirmation>("/api/cases", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -139,8 +164,13 @@ export async function confirmIntake(
         location_state: profile.location.state,
         people: [
           {
-            name: profile.deceased.name,
-            relationship: profile.deceased.relationship,
+            ...(savedFamily[0]
+              ? { id: savedFamily[0].id }
+              : selected?.name === people[0].name
+                ? { id: selected.id }
+                : {}),
+            name: people[0].name,
+            relationship: people[0].relationship,
             role: null,
             is_deceased: bereavement,
             attributes: {
@@ -148,25 +178,60 @@ export async function confirmIntake(
               pension_status: profile.deceased.pension_status,
             },
           },
-          ...profile.surviving_members.map((person) => ({
+          ...people.slice(1).map((person, index) => ({
+            ...(savedFamily[index + 1] ? { id: savedFamily[index + 1].id } : {}),
+            ...(selected?.name === person.name
+              ? { id: selected.id }
+              : "id" in person && person.id
+                ? { id: person.id }
+                : {}),
             name: person.name,
             relationship: person.relationship,
             role: null,
             is_deceased: false,
             attributes: {
-              occupation: person.occupation,
-              pension_status: person.pension_status,
+              occupation: "occupation" in person ? person.occupation : "",
+              pension_status: "pension_status" in person ? person.pension_status : "unknown",
             },
           })),
         ],
       },
-      ...(bereavement ? { subject_person_index: 0, subject_relationship: profile.deceased.relationship } : {}),
+      ...(subjectIndex !== null ? { subject_person_index: subjectIndex, subject_relationship: people[subjectIndex].relationship } : {}),
     }),
   });
 }
 
 export function getCatalogServices(): Promise<{ services: CatalogService[] }> {
   return request("/api/catalog/services");
+}
+
+export function getFamily(signal?: AbortSignal): Promise<FamilyMember[]> {
+  return request("/api/auth/me/family", { signal });
+}
+
+export function addFamilyMember(
+  input: Pick<FamilyMember, "name" | "relationship"> & Partial<FamilyMember>,
+): Promise<FamilyMember> {
+  return request("/api/auth/me/family", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateFamilyMember(
+  memberId: string,
+  input: Partial<FamilyMember>,
+): Promise<FamilyMember> {
+  return request(`/api/auth/me/family/${encodeURIComponent(memberId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export function removeFamilyMember(memberId: string): Promise<void> {
+  return request(`/api/auth/me/family/${encodeURIComponent(memberId)}`, { method: "DELETE" });
 }
 
 export function getActiveBenefits(signal?: AbortSignal): Promise<{ benefits: ActiveBenefit[] }> {
@@ -229,6 +294,10 @@ export function getCase(caseId: string, signal?: AbortSignal): Promise<CitizenCa
 
 export function getCaseOverview(caseId: string, signal?: AbortSignal): Promise<CaseOverview> {
   return request<CaseOverview>(`/api/cases/${encodeURIComponent(caseId)}`, { signal });
+}
+
+export function getCases(signal?: AbortSignal): Promise<{ cases: CaseListItem[] }> {
+  return request("/api/cases", { signal });
 }
 
 export function getTask(

@@ -1,20 +1,45 @@
+import { FormEvent, useEffect, useState } from "react";
+
+import { addFamilyMember, getFamily } from "@/lib/api";
 import type { IntakeHouseholdProfile } from "@/types/api";
+import type { FamilyMember } from "@/types/api";
 
 interface ProfileSummaryProps {
   profile: IntakeHouseholdProfile;
   busy: boolean;
   error: string | null;
-  onConfirm: () => void;
+  categoryId?: string;
+  onConfirm: (subject?: "self" | FamilyMember | null) => void;
   onClarify: () => void;
 }
 
 export function ProfileSummary({
   profile,
   busy,
+  categoryId = "bereavement",
   error,
   onConfirm,
   onClarify,
 }: ProfileSummaryProps) {
+  const [family, setFamily] = useState<FamilyMember[]>([]);
+  const [subject, setSubject] = useState("self");
+  const inferred = categoryId === "bereavement";
+  useEffect(() => {
+    if (!inferred) void getFamily().then(setFamily);
+  }, [inferred]);
+
+  async function addInline(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const member = await addFamilyMember({
+      name: String(form.get("name")),
+      relationship: String(form.get("relationship")),
+      source: "manual",
+    });
+    setFamily((current) => [...current, member]);
+    setSubject(member.id);
+    event.currentTarget.reset();
+  }
   const assets = [
     ["BESCOM connection", profile.assets.bescom],
     ["Ration card", profile.assets.ration_card],
@@ -37,6 +62,21 @@ export function ProfileSummary({
       </p>
 
       <div className="mt-7 grid gap-4 sm:grid-cols-2">
+        {!inferred ? (
+          <fieldset className="rounded-2xl border border-teal-200 bg-teal-50 p-5 sm:col-span-2">
+            <legend className="px-1 font-bold text-slate-950">Who is this service for?</legend>
+            <label className="mt-3 flex gap-2 text-sm"><input checked={subject === "self"} name="subject" onChange={() => setSubject("self")} type="radio" /> For me</label>
+            {family.map((member) => <label className="mt-2 flex gap-2 text-sm" key={member.id}><input checked={subject === member.id} name="subject" onChange={() => setSubject(member.id)} type="radio" /> {member.name} ({member.relationship})</label>)}
+            <details className="mt-3">
+              <summary className="cursor-pointer text-sm font-bold text-teal-800">+ Add a family member or someone else</summary>
+              <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => void addInline(event)}>
+                <input aria-label="Person name" className="rounded-xl border border-slate-300 px-3 py-2 text-sm" name="name" placeholder="Name" required />
+                <input aria-label="Relationship" className="rounded-xl border border-slate-300 px-3 py-2 text-sm" name="relationship" placeholder="Relationship" required />
+                <button className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-bold text-white" type="submit">Add and select</button>
+              </form>
+            </details>
+          </fieldset>
+        ) : null}
         <article className="rounded-2xl border border-stone-200 bg-stone-50 p-5">
           <p className="text-xs font-bold uppercase tracking-[0.14em] text-stone-500">Deceased</p>
           <h3 className="mt-2 text-lg font-bold text-slate-950">{profile.deceased.name}</h3>
@@ -101,7 +141,7 @@ export function ProfileSummary({
         <button
           className="rounded-xl bg-teal-800 px-5 py-3 text-sm font-bold text-white transition hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
           disabled={busy}
-          onClick={onConfirm}
+          onClick={() => onConfirm(inferred ? null : subject === "self" ? "self" : family.find((member) => member.id === subject))}
           type="button"
         >
           {busy ? "Creating your plan…" : "Looks correct, create my plan"}

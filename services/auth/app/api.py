@@ -16,12 +16,15 @@ from app.clients import CatalogClient
 from app.config import settings
 from app.db import get_session
 from app.kafka import EventPublisher
-from app.models import ProfileFieldProvenance, RefreshToken, User
+from app.models import FamilyMember, ProfileFieldProvenance, RefreshToken, User
 from app.profile import completeness, enrich_profile, missing_fields, profile_payload, suggestions
 from app.schemas import (
     AccessTokenResponse,
     EnrichmentField,
     EnrichmentRequest,
+    FamilyMemberCreate,
+    FamilyMemberResponse,
+    FamilyMemberUpdate,
     LoginRequest,
     ProfileFieldUpdate,
     ProvenanceDecision,
@@ -251,6 +254,75 @@ async def logout(user: CurrentUserDep, session: SessionDep) -> Response:
 @router.get("/me", response_model=UserResponse)
 async def me(user: CurrentUserDep) -> User:
     return user
+
+
+@router.get("/me/family", response_model=list[FamilyMemberResponse])
+async def family(user: CurrentUserDep, session: SessionDep) -> list[FamilyMember]:
+    return list(
+        await session.scalars(
+            select(FamilyMember)
+            .where(FamilyMember.user_id == user.id)
+            .order_by(FamilyMember.created_at)
+        )
+    )
+
+
+@router.post("/me/family", response_model=FamilyMemberResponse, status_code=status.HTTP_201_CREATED)
+async def add_family_member(
+    payload: FamilyMemberCreate, user: CurrentUserDep, session: SessionDep
+) -> FamilyMember:
+    member = await session.scalar(
+        select(FamilyMember).where(
+            FamilyMember.user_id == user.id,
+            FamilyMember.name == payload.name,
+            FamilyMember.relationship == payload.relationship,
+        )
+    )
+    if member is None:
+        member = FamilyMember(
+            user_id=user.id,
+            **payload.model_dump(exclude_none=True),
+        )
+        session.add(member)
+    else:
+        for name, value in payload.model_dump(exclude={"id"}, exclude_none=True).items():
+            setattr(member, name, value)
+    await session.commit()
+    await session.refresh(member)
+    return member
+
+
+@router.patch("/me/family/{member_id}", response_model=FamilyMemberResponse)
+async def update_family_member(
+    member_id: UUID,
+    payload: FamilyMemberUpdate,
+    user: CurrentUserDep,
+    session: SessionDep,
+) -> FamilyMember:
+    member = await session.scalar(
+        select(FamilyMember).where(FamilyMember.id == member_id, FamilyMember.user_id == user.id)
+    )
+    if member is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Family member not found")
+    for name, value in payload.model_dump(exclude_unset=True).items():
+        setattr(member, name, value)
+    await session.commit()
+    await session.refresh(member)
+    return member
+
+
+@router.delete("/me/family/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_family_member(
+    member_id: UUID, user: CurrentUserDep, session: SessionDep
+) -> Response:
+    member = await session.scalar(
+        select(FamilyMember).where(FamilyMember.id == member_id, FamilyMember.user_id == user.id)
+    )
+    if member is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Family member not found")
+    await session.delete(member)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.patch("/me", response_model=UserResponse)

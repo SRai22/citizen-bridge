@@ -21,10 +21,24 @@ export type ExternalApplicationStatus =
 export type ApprovalStatus = "pending" | "approved" | "rejected";
 
 export interface IntakePersonProfile {
+  id?: string;
   name: string;
   relationship: string;
   occupation: string;
   pension_status: "active" | "inactive" | "none" | "unknown";
+}
+
+export interface FamilyMember {
+  id: string;
+  name: string;
+  relationship: string;
+  date_of_birth: string | null;
+  phone: string | null;
+  is_deceased: boolean;
+  death_date: string | null;
+  source: "manual" | "intake";
+  created_at: string;
+  updated_at: string;
 }
 
 export interface IntakeHouseholdProfile {
@@ -70,6 +84,7 @@ export interface CatalogService {
   category: string;
   typical_wait_days: [number, number];
   stages_known: boolean;
+  workflow_id: string;
 }
 
 export interface ProfileSource {
@@ -149,6 +164,8 @@ export interface CaseOverview {
   life_event_type: string;
   my_role: string;
   my_permissions: string[];
+  limitations: string[];
+  subject: { person_id: string | null; name: string; relationship: string } | null;
   progress: { completed: number; total: number };
   created_at: string;
   updated_at: string;
@@ -158,6 +175,17 @@ export interface CaseOverview {
     blocked: CaseTask[];
     completed: CaseTask[];
   };
+}
+
+export interface CaseListItem {
+  case_id: string;
+  title: string;
+  status: CaseStatus;
+  life_event_type: string;
+  my_role: string;
+  progress: { completed: number; total: number };
+  created_at: string;
+  updated_at: string;
 }
 
 export interface RemediationAction {

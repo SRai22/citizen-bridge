@@ -203,6 +203,35 @@ async def test_login_rate_limit(api_context) -> None:
     await login_limiter.clear("missing")
 
 
+@pytest.mark.asyncio
+async def test_family_member_lifecycle_is_user_scoped(api_context) -> None:
+    client, _, _ = api_context
+    registered = await client.post("/api/auth/register", json=REGISTRATION)
+    headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
+
+    created = await client.post(
+        "/api/auth/me/family",
+        headers=headers,
+        json={"name": "Kamala Devi", "relationship": "mother", "source": "manual"},
+    )
+    assert created.status_code == 201, created.text
+    member_id = created.json()["id"]
+    assert (await client.get("/api/auth/me/family", headers=headers)).json()[0]["name"] == (
+        "Kamala Devi"
+    )
+
+    updated = await client.patch(
+        f"/api/auth/me/family/{member_id}",
+        headers=headers,
+        json={"date_of_birth": "1960-02-03"},
+    )
+    assert updated.json()["date_of_birth"] == "1960-02-03"
+    assert (await client.delete(f"/api/auth/me/family/{member_id}", headers=headers)).status_code == (
+        204
+    )
+    assert (await client.get("/api/auth/me/family", headers=headers)).json() == []
+
+
 class AbortContext:
     async def abort(self, code, detail) -> None:
         raise RuntimeError((code, detail))

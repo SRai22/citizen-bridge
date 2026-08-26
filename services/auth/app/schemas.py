@@ -147,3 +147,43 @@ class ProvenanceResponse(BaseModel):
     valid_from: datetime | None
     valid_until: datetime | None
     created_at: datetime
+
+
+class FamilyMemberCreate(BaseModel):
+    id: UUID | None = None
+    name: str = Field(min_length=1, max_length=120)
+    relationship: str = Field(min_length=1, max_length=50)
+    date_of_birth: date | None = None
+    phone: str | None = Field(default=None, min_length=7, max_length=32)
+    is_deceased: bool = False
+    death_date: date | None = None
+    source: Literal["manual", "intake"] = "manual"
+
+    @field_validator("name", "relationship", "phone")
+    @classmethod
+    def strip_family_text(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
+
+
+class FamilyMemberUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    relationship: str | None = Field(default=None, min_length=1, max_length=50)
+    date_of_birth: date | None = None
+    phone: str | None = Field(default=None, min_length=7, max_length=32)
+    is_deceased: bool | None = None
+    death_date: date | None = None
+
+
+class FamilyMemberResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    relationship: str
+    date_of_birth: date | None
+    phone: str | None
+    is_deceased: bool
+    death_date: date | None
+    source: str
+    created_at: datetime
+    updated_at: datetime

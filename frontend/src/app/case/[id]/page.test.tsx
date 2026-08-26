@@ -14,6 +14,8 @@ const citizenCase: CaseOverview = {
   life_event_type: "father_death",
   my_role: "owner",
   my_permissions: ["view", "submit", "approve", "manage"],
+  limitations: [],
+  subject: null,
   progress: { completed: 0, total: 2 },
   created_at: "2026-08-24T12:00:00Z",
   updated_at: "2026-08-24T12:00:00Z",

@@ -72,6 +72,7 @@ class Catalog:
             "typical_wait_days",
             "stages_known",
             "required_profile_fields",
+            "workflow_id",
         }
         return [service.model_dump(include=fields) for service in matches]
 

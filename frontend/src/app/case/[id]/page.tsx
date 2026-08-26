@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { DependencyGraph, type DependencyGraphTask } from "@/components/dependency-graph";
+import { CoordinatorBanner } from "@/components/coordinator-banner";
 import { ErrorState, LoadingState } from "@/components/page-state";
 import { StatusBadge } from "@/components/status-badge";
 import { WaitingState } from "@/components/waiting-state";
@@ -48,7 +49,8 @@ export default function CaseOverviewPage() {
 
   return (
     <div className="mx-auto max-w-5xl py-2 sm:py-3">
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+      <CoordinatorBanner citizenCase={citizenCase} />
+      <section className={`${citizenCase.my_role === "coordinator" ? "mt-4 " : ""}rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8`}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
             <span aria-hidden="true" className="grid size-12 shrink-0 place-items-center rounded-2xl bg-teal-50 text-2xl text-teal-800">◎</span>
@@ -134,4 +136,3 @@ function TaskCard({ allTasks, caseId, kind, task }: { allTasks: CaseTask[]; case
     </li>
   );
 }
-

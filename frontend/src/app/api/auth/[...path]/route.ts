@@ -21,3 +21,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 export async function PATCH(request: NextRequest, context: RouteContext) {
   return proxyBackendRequest(request, authPath((await context.params).path));
 }
+
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  return proxyBackendRequest(request, authPath((await context.params).path));
+}

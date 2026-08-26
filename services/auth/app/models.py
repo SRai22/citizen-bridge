@@ -1,7 +1,17 @@
 from datetime import UTC, date, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Index, String, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -39,6 +49,38 @@ class User(Base):
     profile_provenance: Mapped[list["ProfileFieldProvenance"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    family_members: Mapped[list["FamilyMember"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class FamilyMember(Base):
+    __tablename__ = "family_members"
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", "relationship", name="uq_family_member_identity"),
+        {"schema": "auth"},
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("auth.users.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(120))
+    relationship: Mapped[str] = mapped_column(String(50))
+    date_of_birth: Mapped[date | None] = mapped_column(Date)
+    phone: Mapped[str | None] = mapped_column(String(32))
+    is_deceased: Mapped[bool] = mapped_column(Boolean, default=False)
+    death_date: Mapped[date | None] = mapped_column(Date)
+    source: Mapped[str] = mapped_column(String(40), default="manual")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+    user: Mapped[User] = relationship(back_populates="family_members")
 
 
 class ProfileFieldProvenance(Base):

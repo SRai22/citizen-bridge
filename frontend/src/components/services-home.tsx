@@ -111,13 +111,21 @@ export function ServicesHome() {
 
       <section className="mt-8 border-t border-slate-200 pt-6">
         <button aria-expanded={browseOpen} className="font-bold text-teal-800 hover:text-teal-950" onClick={() => setBrowseOpen((open) => !open)} type="button">{browseOpen ? "Hide service types ↑" : "Or browse by service type →"}</button>
-        {browseOpen ? <ServiceBrowser services={services} /> : null}
+        {browseOpen ? <ServiceBrowser categories={categories} onSelect={(cat) => { setSelected(cat); setBrowseOpen(false); }} services={services} /> : null}
       </section>
     </>
   );
 }
 
-function ServiceBrowser({ services }: { services: CatalogService[] }) {
+function ServiceBrowser({
+  categories,
+  onSelect,
+  services,
+}: {
+  categories: LifeEventCategory[];
+  onSelect: (category: LifeEventCategory) => void;
+  services: CatalogService[];
+}) {
   return (
     <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       {serviceGroups.map(([id, title]) => {
@@ -125,7 +133,30 @@ function ServiceBrowser({ services }: { services: CatalogService[] }) {
         return (
           <section className="rounded-2xl border border-slate-200 bg-white p-5" key={id}>
             <h3 className="font-bold text-slate-950">{title}</h3>
-            {matches.length ? <ul className="mt-3 space-y-2 text-sm text-slate-600">{matches.map((service) => <li key={service.id}>{service.name}</li>)}</ul> : <p className="mt-3 text-sm text-slate-500">More services coming soon.</p>}
+            {matches.length ? (
+              <ul className="mt-3 space-y-2 text-sm text-slate-600">
+                {matches.map((service) => {
+                  const cat = categories.find((c) => c.id === service.category);
+                  return (
+                    <li key={service.id}>
+                      {cat ? (
+                        <button
+                          className="text-left text-teal-700 underline-offset-2 hover:underline"
+                          onClick={() => onSelect(cat)}
+                          type="button"
+                        >
+                          {service.name}
+                        </button>
+                      ) : (
+                        service.name
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="mt-3 text-sm text-slate-500">More services coming soon.</p>
+            )}
           </section>
         );
       })}

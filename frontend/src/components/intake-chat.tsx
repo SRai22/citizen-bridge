@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ProfileSummary } from "@/components/profile-summary";
 import { ApiError, confirmIntake, sendIntakeMessage, startIntake } from "@/lib/api";
 import type { IntakeHouseholdProfile } from "@/types/api";
+import type { FamilyMember } from "@/types/api";
 
 interface ChatMessage {
   id: number;
@@ -71,12 +72,12 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
     }
   }
 
-  async function handleConfirm() {
+  async function handleConfirm(subject?: "self" | FamilyMember | null) {
     if (!sessionId || busy) return;
     setError(null);
     setBusy(true);
     try {
-      const confirmation = await confirmIntake(sessionId, categoryId);
+      const confirmation = await confirmIntake(sessionId, categoryId, subject ?? null);
       router.push(`/life-events/${encodeURIComponent(confirmation.case_id)}`);
     } catch (reason) {
       setError(messageFor(reason));
@@ -89,6 +90,7 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
       <ProfileSummary
         busy={busy}
         error={error}
+        categoryId={categoryId}
         onClarify={() => {
           setError(null);
           setProfile(null);

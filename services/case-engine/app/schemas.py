@@ -18,6 +18,7 @@ class LifeEventCreate(RequestModel):
 
 
 class PersonCreate(RequestModel):
+    id: UUID | None = None
     name: str = Field(min_length=1, max_length=200)
     relationship: str = Field(min_length=1, max_length=100)
     role: str | None = Field(default=None, max_length=100)

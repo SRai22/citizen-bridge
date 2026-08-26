@@ -72,7 +72,10 @@ async def create_case(
         household = HouseholdProfile(
             location_city=payload.household_profile.location_city,
             location_state=payload.household_profile.location_state,
-            people=[Person(**person.model_dump()) for person in payload.household_profile.people],
+            people=[
+                Person(**person.model_dump(exclude_none=True))
+                for person in payload.household_profile.people
+            ],
         )
     case = Case(
         title=f"{event.type.replace('_', ' ').title()} — Administrative Formalities",
