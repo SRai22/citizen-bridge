@@ -325,6 +325,19 @@ async def route_event(authority: AuthorityClient, event: dict) -> list[tuple[str
                 event,
             )
         )
+    elif event_type == "benefit.discovered":
+        user_id = event.get("user_id")
+        if not user_id:
+            return []
+        users = [str(user_id)]
+        name = str(event.get("name") or "benefit")
+        draft = _draft(
+            "benefit_discovered",
+            "normal",
+            f"New benefit: {name}",
+            "Review your eligibility and application readiness.",
+            event,
+        )
     else:
         return []
     return [(user_id, draft) for user_id in dict.fromkeys(users)]
