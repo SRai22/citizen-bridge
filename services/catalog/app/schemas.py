@@ -24,7 +24,8 @@ class TaskDefinition(CatalogModel):
 
 class ApplicabilityRule(CatalogModel):
     field: str = Field(pattern=r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$")
-    equals: Any
+    equals: Any = None
+    exists: bool | None = None
 
 
 class EligibilityRule(CatalogModel):

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
 
@@ -29,17 +29,41 @@ class HouseholdAssets(StrictModel):
     property: bool
 
 
-class HouseholdProfile(StrictModel):
+class BereavementProfile(StrictModel):
     deceased: PersonProfile
     surviving_members: list[PersonProfile]
     location: Location
     assets: HouseholdAssets
 
 
+class BabyProfile(StrictModel):
+    name: str = Field(min_length=1)
+    dob: date
+    gender: Literal["female", "male", "other", "unknown"]
+
+
+class NewBabyProfile(StrictModel):
+    baby: BabyProfile
+    parents: list[str] = Field(min_length=1)
+    location: Location
+    birth_place: str = Field(min_length=1)
+
+
+class MarriageProfile(StrictModel):
+    spouse1: str = Field(min_length=1)
+    spouse2: str = Field(min_length=1)
+    marriage_date: date
+    marriage_place: str = Field(min_length=1)
+    location: Location
+
+
+IntakeProfile = BereavementProfile | NewBabyProfile | MarriageProfile
+
+
 class IntakeTurn(StrictModel):
     status: Literal["in_progress", "complete"]
     message: str = Field(min_length=1)
-    profile: HouseholdProfile | None = None
+    profile: IntakeProfile | None
 
 
 class RemediationAction(StrictModel):
@@ -86,11 +110,11 @@ class ConversationResponse(BaseModel):
     conversation_id: UUID
     message: str
     status: Literal["in_progress", "complete"]
-    profile: HouseholdProfile | None = None
+    profile: IntakeProfile | None = None
 
 
 class ConfirmedProfileResponse(BaseModel):
-    profile: HouseholdProfile
+    profile: IntakeProfile
 
 
 class InterpretationResponse(BaseModel):

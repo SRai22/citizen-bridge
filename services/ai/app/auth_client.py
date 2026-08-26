@@ -13,6 +13,12 @@ class AuthClient:
         except grpc.aio.AioRpcError as exc:
             raise ConnectionError("Auth service unavailable") from exc
 
+    async def get_user(self, user_id: str):
+        try:
+            return await self.stub.GetUser(auth_pb2.GetUserRequest(user_id=user_id))
+        except grpc.aio.AioRpcError as exc:
+            raise ConnectionError("Auth service unavailable") from exc
+
     async def check(self) -> None:
         await self.channel.channel_ready()
 

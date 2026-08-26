@@ -5,6 +5,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.models import Task
 from app.service import mark_overdue_tasks
 
@@ -107,7 +108,9 @@ async def test_authenticated_case_flow(case_context) -> None:
         },
     )
     assert completed.status_code == 200
-    topic, event = events.events[-1]
+    topic, event = next(
+        item for item in reversed(events.events) if item[1]["event_type"] == "task.completed"
+    )
     assert topic == "tasks"
     assert event["event_type"] == "task.completed"
     assert event["owner_user_id"] == str(user_id)
@@ -156,7 +159,10 @@ async def test_failed_task_uses_ai_rejection_interpretation(case_context) -> Non
 
 
 @pytest.mark.asyncio
-async def test_task_review_creates_approval_and_submission_receipt(case_context) -> None:
+async def test_demo_approval_completes_task_and_unlocks_next_workflows(
+    case_context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "demo_mode", True)
     client, _, users, _, _ = case_context
     user_id = uuid4()
     users.add(user_id)
@@ -184,22 +190,26 @@ async def test_task_review_creates_approval_and_submission_receipt(case_context)
         headers=headers(user_id),
     )
     assert approved.status_code == 200, approved.text
-    assert approved.json()["status"] == "submitted"
+    assert approved.json()["status"] == "approved"
+    assert approved.json()["response_payload"]["message"] == (
+        "Approved automatically for the Citizen Bridge demo."
+    )
     assert approved.json()["external_reference_id"].startswith("CB/DEATH_CERTIFICATE/")
 
     case = await client.get(f"/api/cases/{case_id}", headers=headers(user_id))
-    assert case.json()["tasks_by_group"]["waiting"][0]["task_id"] == task_id
+    assert case.json()["tasks_by_group"]["completed"][0]["task_id"] == task_id
+    assert {task["workflow_id"] for task in case.json()["tasks_by_group"]["ready"]} == {
+        "family_pension",
+        "bescom_transfer",
+        "ration_card",
+    }
 
     withdrawable = await client.get("/api/cases/withdrawable", headers=headers(user_id))
-    assert withdrawable.json()["withdrawable"][0]["can_withdraw"] is True
+    assert withdrawable.json()["withdrawable"][0]["can_withdraw"] is False
     withdrawn = await client.post(
         f"/api/cases/{case_id}/tasks/{task_id}/withdraw", headers=headers(user_id)
     )
-    assert withdrawn.json()["task_status"] == "cancelled"
-    repeated = await client.post(
-        f"/api/cases/{case_id}/tasks/{task_id}/withdraw", headers=headers(user_id)
-    )
-    assert repeated.status_code == 409
+    assert withdrawn.status_code == 409
 
 
 @pytest.mark.asyncio

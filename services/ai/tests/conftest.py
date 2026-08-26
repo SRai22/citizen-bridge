@@ -27,6 +27,9 @@ class FakeAuth:
             return SimpleNamespace(valid=False, user_id="")
         return SimpleNamespace(valid=True, user_id=str(user_id))
 
+    async def get_user(self, user_id: str):
+        return SimpleNamespace(user_id=user_id, username="asha", name="Asha Rao", city="Bengaluru")
+
 
 class FakePublisher:
     def __init__(self) -> None:

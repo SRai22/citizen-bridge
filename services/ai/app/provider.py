@@ -9,11 +9,14 @@ from pydantic import ValidationError
 
 from app.config import Settings
 from app.schemas import (
+    BabyProfile,
+    BereavementProfile,
     HouseholdAssets,
-    HouseholdProfile,
     IntakeTurn,
     Interpretation,
     Location,
+    MarriageProfile,
+    NewBabyProfile,
     PersonProfile,
     ProviderResult,
     RemediationAction,
@@ -21,30 +24,57 @@ from app.schemas import (
 
 PROMPTS = Path(__file__).parent / "prompts"
 
-MOCK_PROFILE = HouseholdProfile(
-    deceased=PersonProfile(
-        name="Arun Rao",
-        relationship="father",
-        occupation="retired Karnataka state government employee",
-        pension_status="active",
+MOCK_PROFILES = {
+    "bereavement": BereavementProfile(
+        deceased=PersonProfile(
+            name="Arun Rao",
+            relationship="father",
+            occupation="retired Karnataka state government employee",
+            pension_status="active",
+        ),
+        surviving_members=[
+            PersonProfile(
+                name="Meera Rao",
+                relationship="spouse",
+                occupation="homemaker",
+                pension_status="none",
+            )
+        ],
+        location=Location(city="Bengaluru", state="Karnataka"),
+        assets=HouseholdAssets(bescom=True, ration_card=True, property=False),
     ),
-    surviving_members=[
-        PersonProfile(
-            name="Meera Rao",
-            relationship="spouse",
-            occupation="homemaker",
-            pension_status="none",
-        )
-    ],
-    location=Location(city="Bengaluru", state="Karnataka"),
-    assets=HouseholdAssets(bescom=True, ration_card=True, property=False),
-)
-MOCK_QUESTIONS = (
-    "Which city and state did the person live in?",
-    "Were they employed or retired, and were they receiving a government pension?",
-    "Who else is in the household, and did they hold a BESCOM connection, ration card, "
-    "or property?",
-)
+    "new_baby": NewBabyProfile(
+        baby=BabyProfile(name="Anaya Rao", dob="2026-08-20", gender="female"),
+        parents=["Meera Rao", "Kiran Rao"],
+        location=Location(city="Bengaluru", state="Karnataka"),
+        birth_place="Vani Vilas Hospital",
+    ),
+    "marriage": MarriageProfile(
+        spouse1="Meera Rao",
+        spouse2="Kiran Rao",
+        marriage_date="2026-08-15",
+        marriage_place="Bengaluru Registrar Office",
+        location=Location(city="Bengaluru", state="Karnataka"),
+    ),
+}
+MOCK_QUESTIONS = {
+    "bereavement": (
+        "Which city and state did the person live in?",
+        "Were they employed or retired, and were they receiving a government pension?",
+        "Who else is in the household, and did they hold a BESCOM connection, ration card, "
+        "or property?",
+    ),
+    "new_baby": (
+        "What is the baby's name, date of birth, and gender?",
+        "What is the other parent's name?",
+        "Where was the baby born, and which city and state does the family live in?",
+    ),
+    "marriage": (
+        "What is your spouse's name?",
+        "What was the marriage date and place?",
+        "Which city and state do the spouses live in?",
+    ),
+}
 MOCK_INTERPRETATION = Interpretation(
     cause="missing_legal_heir_certificate",
     explanation=(
@@ -68,7 +98,10 @@ class AIProvider:
     def __init__(self, settings: Settings, client: AsyncOpenAI | None = None) -> None:
         self.settings = settings
         self.client = client
-        self.intake_prompt = (PROMPTS / "intake_system.md").read_text(encoding="utf-8")
+        self.intake_prompts = {
+            category_id: (PROMPTS / f"intake_{category_id}.md").read_text(encoding="utf-8")
+            for category_id in MOCK_PROFILES
+        }
         self.rejection_prompt = (PROMPTS / "rejection_interpretation.md").read_text(
             encoding="utf-8"
         )
@@ -76,6 +109,8 @@ class AIProvider:
     async def intake(
         self, messages: Sequence[Mapping[str, str]], category_id: str
     ) -> ProviderResult:
+        if category_id not in MOCK_PROFILES:
+            raise ValueError(f"Unsupported intake category: {category_id}")
         if self.settings.ai_mock_mode:
             user_turns = sum(message.get("role") == "user" for message in messages)
             latest = next(
@@ -90,12 +125,15 @@ class AIProvider:
                 IntakeTurn(
                     status="complete",
                     message="I have everything I need. Here's a summary of what we'll handle:",
-                    profile=MOCK_PROFILE,
+                    profile=MOCK_PROFILES[category_id],
                 )
                 if user_turns >= 4
                 else IntakeTurn(
                     status="in_progress",
-                    message=self._mock_reply(latest, MOCK_QUESTIONS[max(0, user_turns - 1)]),
+                    message=self._mock_reply(
+                        latest, MOCK_QUESTIONS[category_id][max(0, user_turns - 1)]
+                    ),
+                    profile=None,
                 )
             )
             return ProviderResult(value=value, model="mock")
@@ -105,7 +143,7 @@ class AIProvider:
             [
                 {
                     "role": "system",
-                    "content": f"{self.intake_prompt}\n\nCategory context: {category_id}",
+                    "content": self.intake_prompts[category_id],
                 },
                 *messages,
             ],

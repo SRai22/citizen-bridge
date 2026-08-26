@@ -263,6 +263,7 @@ services:
       DOCUMENTS_GRPC_HOST: documents:50054
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN is required}
       AI_GRPC_HOST: ai:50057
+      DEMO_MODE: ${DEMO_MODE:-true}
       DATABASE_URL: postgresql+asyncpg://case_service:${CASE_DB_PASSWORD}@postgres:5432/citizen_bridge
     expose: ["8003", "50053"]
 

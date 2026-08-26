@@ -8,6 +8,12 @@ from app.config import settings
 from app.grpc import AIService
 from app.models import AIRequestLog, Conversation
 from app.provider import AIProvider
+from app.schemas import IntakeTurn, MarriageProfile, NewBabyProfile
+
+
+def test_intake_schema_requires_nullable_profile_for_openai_strict_output() -> None:
+    schema = IntakeTurn.model_json_schema()
+    assert set(schema["properties"]) == set(schema["required"])
 
 
 @pytest.mark.parametrize(
@@ -23,6 +29,24 @@ def test_mock_intake_adapts_to_the_citizens_style(message: str, expected: str) -
     reply = AIProvider._mock_reply(message, "Which city did they live in?")
     assert expected in reply
     assert reply.endswith("Which city did they live in?")
+
+
+@pytest.mark.parametrize(
+    ("category_id", "user_turns", "expected"),
+    [
+        ("new_baby", 2, "other parent's name"),
+        ("marriage", 1, "your spouse's name"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_mock_intake_does_not_ask_for_authenticated_citizen_name(
+    category_id: str, user_turns: int, expected: str
+) -> None:
+    result = await AIProvider(settings).intake(
+        [{"role": "user", "content": "answer"}] * user_turns,
+        category_id,
+    )
+    assert expected in result.value.message.lower()
 
 
 def auth(user_id) -> dict[str, str]:
@@ -75,7 +99,9 @@ async def test_mock_intake_persists_and_confirms_profile(ai_context) -> None:
         conversation = await session.get(Conversation, UUID(conversation_id))
         assert conversation is not None
         assert conversation.status == "completed"
-        assert len(conversation.messages) == 9
+        assert len(conversation.messages) == 10
+        assert conversation.messages[0]["role"] == "system"
+        assert '"name": "Asha Rao"' in conversation.messages[0]["content"]
         assert await session.scalar(
             select(func.count()).select_from(AIRequestLog).where(
                 AIRequestLog.conversation_id == conversation.id
@@ -90,6 +116,56 @@ async def test_mock_intake_persists_and_confirms_profile(ai_context) -> None:
         "city": "Bengaluru",
         "state": "Karnataka",
     }
+
+
+@pytest.mark.parametrize(
+    ("category_id", "profile_type", "expected_field", "expected_value"),
+    [
+        ("new_baby", NewBabyProfile, ("baby", "name"), "Anaya Rao"),
+        ("marriage", MarriageProfile, ("spouse1",), "Meera Rao"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_mock_intake_routes_profile_by_category(
+    ai_context, category_id, profile_type, expected_field, expected_value
+) -> None:
+    client, _, events = ai_context
+    user_id = uuid4()
+    started = await client.post(
+        "/api/ai/intake/start",
+        json={"category_id": category_id},
+        headers=auth(user_id),
+    )
+    conversation_id = started.json()["conversation_id"]
+
+    for turn in range(4):
+        response = await client.post(
+            f"/api/ai/intake/{conversation_id}/message",
+            json={"message": f"answer {turn}"},
+            headers=auth(user_id),
+        )
+
+    body = response.json()
+    turn = IntakeTurn.model_validate(
+        {"status": body["status"], "message": body["message"], "profile": body["profile"]}
+    )
+    assert isinstance(turn.profile, profile_type)
+    value = body["profile"]
+    for field in expected_field:
+        value = value[field]
+    assert value == expected_value
+
+    confirmed = await client.post(
+        f"/api/ai/intake/{conversation_id}/confirm",
+        json={"profile_confirmed": True},
+        headers=auth(user_id),
+    )
+    assert confirmed.status_code == 200
+    assert events.events[-1]["category_id"] == category_id
+    event_profile = events.events[-1]["profile"]
+    assert event_profile == (
+        {"marriage": body["profile"]} if category_id == "marriage" else body["profile"]
+    )
 
 
 @pytest.mark.asyncio

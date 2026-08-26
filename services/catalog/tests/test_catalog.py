@@ -89,3 +89,15 @@ async def test_catalog_grpc_api() -> None:
         "bescom_transfer",
         "ration_card",
     }
+
+    for profile, expected in (
+        (
+            {"baby": {"name": "Anaya Rao", "dob": "2026-08-20"}},
+            {"birth_certificate", "aadhaar_enrollment", "vaccination_registration"},
+        ),
+        ({"marriage": {"spouse1": "Meera Rao"}}, {"marriage_certificate"}),
+    ):
+        result = await servicer.ListApplicableWorkflows(
+            catalog_pb2.ProfileContext(profile_json=json.dumps(profile)), None
+        )
+        assert {json.loads(item.definition_json)["id"] for item in result.workflows} == expected

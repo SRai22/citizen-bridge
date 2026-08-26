@@ -82,7 +82,8 @@ class Catalog:
             for workflow in self.workflows.values()
             if not workflow.dynamic
             and all(
-                _matches(profile, rule.field, rule.equals) for rule in workflow.applicability_rules
+                _matches(profile, rule.field, rule.equals, rule.exists)
+                for rule in workflow.applicability_rules
             )
         ]
         active_ids = {workflow.id for workflow in applicable}
@@ -143,10 +144,14 @@ def _index(model, values: list[dict]) -> dict:
     return indexed
 
 
-def _matches(profile: Mapping[str, object], field: str, expected: object) -> bool:
+def _matches(
+    profile: Mapping[str, object], field: str, expected: object, exists: bool | None = None
+) -> bool:
     value: object = profile
     for segment in field.split("."):
         if not isinstance(value, Mapping) or segment not in value:
-            return False
+            return exists is False
         value = value[segment]
+    if exists is not None:
+        return exists
     return type(value) is type(expected) and value == expected

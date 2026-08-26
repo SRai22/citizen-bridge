@@ -31,11 +31,11 @@ const application: ExternalApplication = {
   task_id: taskDetail.id,
   adapter_type: "family_pension",
   external_reference_id: "TREASURY/PENSION/2026/1234",
-  status: "submitted",
+  status: "approved",
   request_payload: {},
-  response_payload: {},
+  response_payload: { message: "Approved automatically for the Citizen Bridge demo." },
   submitted_at: "2026-08-15T12:00:01Z",
-  responded_at: null,
+  responded_at: "2026-08-15T12:00:02Z",
 };
 
 afterEach(() => {
@@ -43,7 +43,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-test("shows the full review and replaces it with a submission receipt", async () => {
+test("shows submission before the demo approval and offers the next step", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = String(input);
     if (url.endsWith("/requirements")) {
@@ -63,10 +63,17 @@ test("shows the full review and replaces it with a submission receipt", async ()
 
   fireEvent.click(screen.getByRole("button", { name: "Confirm & Submit →" }));
 
-  expect(await screen.findByRole("heading", { name: "Submitted successfully" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Sent for approval" })).toBeInTheDocument();
+  expect(screen.getByText(/automatically reviewing/)).toBeInTheDocument();
   expect(screen.getByText(application.external_reference_id!)).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "What happens next" })).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Back to case overview" })).toHaveAttribute("href", "/life-events/case-123");
+  expect(
+    await screen.findByRole("heading", { name: "Approved" }, { timeout: 2000 }),
+  ).toBeInTheDocument();
+  expect(screen.getByText(/For demo purposes/)).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Next →" })).toHaveAttribute(
+    "href",
+    "/life-events/case-123",
+  );
 });
 
 test("cancels the pending approval and returns to the task", async () => {

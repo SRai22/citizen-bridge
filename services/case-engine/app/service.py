@@ -259,8 +259,33 @@ async def transition_task(
         )
     )
     completed_case: Case | None = None
+    newly_ready: list[Task] = []
     if status == TaskStatus.COMPLETED:
         await session.flush()
+        dependent_ids = list(
+            await session.scalars(
+                select(TaskDependency.task_id).where(
+                    TaskDependency.depends_on_task_id == task.id
+                )
+            )
+        )
+        for dependent_id in dependent_ids:
+            dependent = await session.get(Task, dependent_id)
+            incomplete_dependency = await session.scalar(
+                select(TaskDependency.id)
+                .join(Task, Task.id == TaskDependency.depends_on_task_id)
+                .where(
+                    TaskDependency.task_id == dependent_id,
+                    Task.status != TaskStatus.COMPLETED,
+                )
+            )
+            if (
+                dependent is not None
+                and dependent.status == TaskStatus.PENDING
+                and incomplete_dependency is None
+            ):
+                dependent.status = TaskStatus.READY
+                newly_ready.append(dependent)
         unfinished = await session.scalar(
             select(Task.id).where(
                 Task.case_id == task.case_id,
@@ -306,6 +331,22 @@ async def transition_task(
             output_data=output_data,
         ),
     )
+    for dependent in newly_ready:
+        await publisher.publish(
+            "tasks",
+            _event(
+                "task.status_changed",
+                task_id=str(dependent.id),
+                case_id=str(dependent.case_id),
+                old_status=TaskStatus.PENDING.value,
+                new_status=TaskStatus.READY.value,
+                changed_by=str(user_id),
+                owner_user_id=str(user_id),
+                task_type=dependent.task_type,
+                title=dependent.title,
+                output_data={},
+            ),
+        )
     if completed_case is not None:
         await publisher.publish(
             "cases",

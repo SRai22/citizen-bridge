@@ -117,19 +117,44 @@ export function ApprovalReview({ approvalId, caseId, taskId }: { approvalId?: st
 }
 
 function Receipt({ application, caseHref }: { application: ExternalApplication; caseHref: string }) {
+  const [showDemoApproval, setShowDemoApproval] = useState(false);
   const reference = application.external_reference_id ?? application.id;
   const submitted = application.submitted_at ?? application.responded_at ?? application.updated_at;
+  const demoApproved = application.status === "approved";
+
+  useEffect(() => {
+    if (!demoApproved) return;
+    // DEMO ONLY: keep the sent-for-approval screen visible before revealing the simulated
+    // authority decision. Remove this timer when real approval status updates drive the UI.
+    const timer = window.setTimeout(() => setShowDemoApproval(true), 600);
+    return () => window.clearTimeout(timer);
+  }, [demoApproved]);
+
+  if (demoApproved && showDemoApproval) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-emerald-50 px-4 py-10">
+        <section className="w-full max-w-2xl rounded-3xl border border-emerald-200 bg-white p-7 shadow-sm sm:p-10">
+          <span aria-hidden="true" className="grid size-14 place-items-center rounded-full bg-emerald-700 text-2xl text-white">✓</span>
+          <p className="mt-6 text-sm font-bold uppercase tracking-[0.16em] text-emerald-700">Demo authority response</p>
+          <h1 className="mt-2 text-3xl font-bold text-emerald-950">Approved</h1>
+          <p className="mt-3 text-slate-600">For demo purposes, the authority automatically approved this application.</p>
+          <p className="mt-7 text-sm font-semibold text-slate-500">Reference</p>
+          <p className="mt-1 break-all text-2xl font-bold text-slate-950">{reference}</p>
+          <Link className="mt-8 inline-flex rounded-xl bg-emerald-700 px-6 py-3 font-bold text-white hover:bg-emerald-800" href={caseHref}>Next →</Link>
+        </section>
+      </main>
+    );
+  }
+
   return (
-    <main className="grid min-h-screen place-items-center bg-emerald-50 px-4 py-10">
-      <section className="w-full max-w-2xl rounded-3xl border border-emerald-200 bg-white p-7 shadow-sm sm:p-10">
-        <span aria-hidden="true" className="grid size-14 place-items-center rounded-full bg-emerald-700 text-2xl text-white">✓</span>
-        <h1 className="mt-6 text-3xl font-bold text-emerald-950">Submitted successfully</h1>
+    <main className="grid min-h-screen place-items-center bg-cyan-50 px-4 py-10">
+      <section className="w-full max-w-2xl rounded-3xl border border-cyan-200 bg-white p-7 shadow-sm sm:p-10">
+        <span aria-hidden="true" className="grid size-14 place-items-center rounded-full bg-cyan-700 text-2xl text-white">✓</span>
+        <h1 className="mt-6 text-3xl font-bold text-cyan-950">Sent for approval</h1>
         <p className="mt-7 text-sm font-semibold text-slate-500">Reference</p>
         <p className="mt-1 break-all text-2xl font-bold text-slate-950">{reference}</p>
         <p className="mt-3 text-sm text-slate-600">Submitted: {formatDateTime(submitted)}</p>
-        <h2 className="mt-8 text-xl font-bold text-slate-950">What happens next</h2>
-        <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600"><li>• The responsible authority will review your submission.</li><li>• We’ll notify you when its status changes.</li><li>• The result and any produced document will appear in Citizen Bridge.</li></ul>
-        <Link className="mt-8 inline-flex rounded-xl bg-emerald-700 px-6 py-3 font-bold text-white hover:bg-emerald-800" href={caseHref}>Back to case overview</Link>
+        {demoApproved ? <p className="mt-8 rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-950" role="status">Demo mode: the authority is automatically reviewing this submission now.</p> : <><h2 className="mt-8 text-xl font-bold text-slate-950">What happens next</h2><p className="mt-3 text-sm leading-6 text-slate-600">The responsible authority will review your submission and Citizen Bridge will show its response here.</p><Link className="mt-8 inline-flex rounded-xl bg-cyan-700 px-6 py-3 font-bold text-white hover:bg-cyan-800" href={caseHref}>Back to case overview</Link></>}
       </section>
     </main>
   );

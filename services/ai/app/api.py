@@ -77,9 +77,22 @@ async def start(
     session: SessionDep,
     events: PublisherDep,
     ai: ProviderDep,
+    auth: AuthDep,
 ) -> ConversationResponse:
     model = "mock" if ai.settings.ai_mock_mode else ai.settings.intake_model
-    return await start_intake(session, events, user_id, payload.category_id, model)
+    try:
+        citizen = await auth.get_user(str(user_id))
+    except ConnectionError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+    return await start_intake(
+        session,
+        events,
+        user_id,
+        payload.category_id,
+        model,
+        citizen.name or citizen.username,
+        citizen.city,
+    )
 
 
 @router.post("/intake/{conversation_id}/message", response_model=ConversationResponse)

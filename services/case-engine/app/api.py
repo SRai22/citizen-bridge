@@ -583,7 +583,12 @@ async def approve_submission(
     task = await session.get(Task, approval.task_id)
     assert task is not None
     await session.refresh(task, attribute_names=["wait_state"])
-    await access(authority, user.user_id, task.case_id, "approve")
+    await access(
+        authority,
+        user.user_id,
+        task.case_id,
+        "submit" if settings.demo_mode else "approve",
+    )
     approval.status = "approved"
     reference = f"CB/{task.workflow_id.upper()}/{datetime.now(UTC).year}/{uuid4().hex[:8].upper()}"
     application = ExternalApplication(
@@ -605,6 +610,24 @@ async def approve_submission(
         UUID(user.user_id),
         {"external_reference_id": reference},
     )
+    if settings.demo_mode:
+        # DEMO ONLY: simulate the government authority approving immediately after submission so
+        # every workflow can be demonstrated end-to-end. Remove this block when real authority
+        # status callbacks are connected; production must remain SUBMITTED until that callback.
+        application.status = "approved"
+        application.response_payload = {
+            "message": "Approved automatically for the Citizen Bridge demo."
+        }
+        await session.commit()
+        await transition_task(
+            session,
+            events,
+            task,
+            TaskStatus.COMPLETED,
+            UUID(user.user_id),
+            {"external_reference_id": reference, "demo_auto_approved": True},
+        )
+        await session.refresh(application)
     return _application_payload(application)
 
 
@@ -787,7 +810,7 @@ def _application_payload(application: ExternalApplication) -> dict:
         "request_payload": application.request_payload,
         "response_payload": application.response_payload,
         "submitted_at": application.created_at,
-        "responded_at": None,
+        "responded_at": application.updated_at if application.status == "approved" else None,
     }
 
 

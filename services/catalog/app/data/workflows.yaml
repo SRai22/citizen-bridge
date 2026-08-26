@@ -91,7 +91,7 @@ workflows:
     id: birth_certificate
     description: Register a child's birth and obtain the official certificate.
     adapter_type: birth_certificate
-    applicability_rules: [{field: category_id, equals: new_baby}]
+    applicability_rules: [{field: baby.name, exists: true}]
     tasks: [{id: birth_registration, name: Register Birth, estimated_duration_days: 7}]
     inter_workflow_dependencies: []
     stages: *known_stages
@@ -101,6 +101,7 @@ workflows:
     id: aadhaar_enrollment
     description: Enroll a child for Aadhaar.
     adapter_type: aadhaar_enrollment
+    applicability_rules: [{field: baby.dob, exists: true}]
     tasks: [{id: aadhaar_registration, name: Enroll for Aadhaar, estimated_duration_days: 30}]
     inter_workflow_dependencies: [birth_certificate]
     typical_duration_days: [15, 30]
@@ -109,6 +110,7 @@ workflows:
     id: vaccination_registration
     description: Register a child for public vaccinations.
     adapter_type: vaccination_registration
+    applicability_rules: [{field: baby.dob, exists: true}]
     tasks: [{id: vaccination_signup, name: Register Vaccination Schedule, estimated_duration_days: 3}]
     inter_workflow_dependencies: [birth_certificate]
     stages: []
@@ -176,7 +178,7 @@ workflows:
     id: marriage_certificate
     description: Register a marriage and obtain the official certificate.
     adapter_type: marriage_certificate
-    applicability_rules: [{field: category_id, equals: marriage}]
+    applicability_rules: [{field: marriage.spouse1, exists: true}]
     tasks: [{id: marriage_registration, name: Register Marriage, estimated_duration_days: 30}]
     inter_workflow_dependencies: []
     stages: *known_stages
