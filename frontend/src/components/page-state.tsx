@@ -36,7 +36,7 @@ export function SessionExpiredState() {
 }
 
 export function DeadlinePassedState({ name, deadline }: { name: string; deadline: string }) {
-  return <GuidanceState icon="⚠️" title={`The deadline for ${name} has passed`} description={`The deadline was ${deadline}.`} detail="Check whether a late submission is accepted, or find an alternative service." actions={<><Link className={button} href="/">Find another service</Link><SupportLink className={secondary} /></>} />;
+  return <GuidanceState icon="⚠️" title={`The deadline for ${name} has passed`} description={`The deadline was ${deadline}.`} detail="Check whether a late submission is accepted, or find an alternative service." actions={<><Link className={button} href="/services">Find another service</Link><SupportLink className={secondary} /></>} />;
 }
 
 export function AuthorityErrorState({ role, person, authority }: { role: string; person: string; authority: string }) {
@@ -44,7 +44,7 @@ export function AuthorityErrorState({ role, person, authority }: { role: string;
 }
 
 export function ExpiredDocumentState({ documentName, expired, requiredFor }: { documentName: string; expired: string; requiredFor?: string }) {
-  return <GuidanceState icon="⚠️" title={`Your ${documentName} has expired`} description={`Expired ${expired}.${requiredFor ? ` This document is required for ${requiredFor}.` : ""}`} actions={<><Link className={button} href="/">Renew this document →</Link><Link className={secondary} href="/documents#upload">Upload a newer version</Link></>} compact />;
+  return <GuidanceState icon="⚠️" title={`Your ${documentName} has expired`} description={`Expired ${expired}.${requiredFor ? ` This document is required for ${requiredFor}.` : ""}`} actions={<><Link className={button} href="/services">Renew this document →</Link><Link className={secondary} href="/documents#upload">Upload a newer version</Link></>} compact />;
 }
 
 export function InlineFieldError({ id, children }: { id: string; children: ReactNode }) {

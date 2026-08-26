@@ -90,7 +90,7 @@ export default function ApplicationsPage() {
         </ol>
       ) : applications.length ? (
         <p className="mt-6 rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600">No applications match this filter.</p>
-      ) : <div className="mt-6"><EmptyState title="No applications yet" description="You haven't started any applications yet. Applications will appear here once you begin a service." action={{ label: "Browse services →", href: "/" }} /></div>}
+      ) : <div className="mt-6"><EmptyState title="No applications yet" description="You haven't started any applications yet. Applications will appear here once you begin a service." action={{ label: "Browse services →", href: "/services" }} /></div>}
     </div>
   );
 }

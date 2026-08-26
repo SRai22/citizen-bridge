@@ -129,9 +129,9 @@ services:
 
   nginx:
     image: nginx:1.28.3-alpine3.23
-    depends_on:
-      legacy-backend:
-        condition: service_healthy
+    # depends_on:
+    #   legacy-backend:
+    #     condition: service_healthy
     environment:
       FRONTEND_ORIGIN: ${FRONTEND_URL:-http://localhost:3000}
       NGINX_ENVSUBST_FILTER: ^FRONTEND_ORIGIN$
@@ -152,27 +152,27 @@ services:
           cpus: "0.25"
           memory: 64M
 
-  legacy-backend:
-    build:
-      context: ./backend
-      target: runner
-    environment:
-      DATABASE_URL: ${LEGACY_DATABASE_URL:-sqlite:///./data/citizen_bridge.db}
-      DEMO_MODE: ${DEMO_MODE:-true}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-      MOCK_AI: ${MOCK_AI:-true}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
-    volumes:
-      - citizen_bridge_data:/app/data
-    healthcheck:
-      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 5s
-    restart: unless-stopped
-    networks: [citizen-bridge-net]
+  # legacy-backend:
+  #   build:
+  #     context: ./backend
+  #     target: runner
+  #   environment:
+  #     DATABASE_URL: ${LEGACY_DATABASE_URL:-sqlite:///./data/citizen_bridge.db}
+  #     DEMO_MODE: ${DEMO_MODE:-true}
+  #     FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+  #     MOCK_AI: ${MOCK_AI:-true}
+  #     OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  #     OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
+  #   volumes:
+  #     - citizen_bridge_data:/app/data
+  #   healthcheck:
+  #     test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 5
+  #     start_period: 5s
+  #   restart: unless-stopped
+  #   networks: [citizen-bridge-net]
 
   frontend:
     build:
@@ -207,6 +207,7 @@ services:
       GRPC_PORT: 50051
       ACCESS_TOKEN_MINUTES: ${ACCESS_TOKEN_MINUTES:-15}
       REFRESH_TOKEN_DAYS: ${REFRESH_TOKEN_DAYS:-7}
+      OTP_DEMO_CODE: ${OTP_DEMO_CODE:-123456}
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN is required}
       DATABASE_URL: postgresql+asyncpg://auth_service:${AUTH_DB_PASSWORD}@postgres:5432/citizen_bridge
     expose: ["8001", "50051"]

@@ -1,3 +1,4 @@
+import re
 from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
@@ -39,6 +40,30 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class PhoneOtpRequest(BaseModel):
+    phone: str
+    intent: Literal["login", "register"]
+
+    @field_validator("phone")
+    @classmethod
+    def normalize_phone(cls, value: str) -> str:
+        digits = re.sub(r"\D", "", value)
+        if digits.startswith("91") and len(digits) == 12:
+            digits = digits[2:]
+        if not re.fullmatch(r"[6-9]\d{9}", digits):
+            raise ValueError("Enter a valid 10-digit Indian mobile number")
+        return f"+91{digits}"
+
+
+class PhoneOtpVerify(PhoneOtpRequest):
+    code: str = Field(pattern=r"^\d{6}$")
+
+
+class PhoneOtpResponse(BaseModel):
+    sent: bool = True
+    demo_code: str | None = None
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 
@@ -48,6 +73,10 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+
+
+class PhoneTokenResponse(TokenResponse):
+    is_new_user: bool
 
 
 class AccessTokenResponse(BaseModel):

@@ -9,6 +9,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
 os.environ.setdefault("JWT_SECRET", "test-only-secret-with-at-least-32-characters")
 os.environ.setdefault("OTEL_ENABLED", "false")
 os.environ.setdefault("INTERNAL_SERVICE_TOKEN", "test-internal-token")
+os.environ.setdefault("OTP_DEMO_CODE", "123456")
 
 from app.api import get_catalog, get_data_services, get_publisher
 from app.db.base import Base

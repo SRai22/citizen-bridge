@@ -65,6 +65,22 @@ export function login(username: string, password: string): Promise<{ user_id: st
   });
 }
 
+export function requestPhoneOtp(phone: string, intent: "login" | "register"): Promise<{ sent: boolean; demo_code: string | null }> {
+  return request("/api/auth/phone/request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phone, intent }),
+  });
+}
+
+export function verifyPhoneOtp(phone: string, code: string, intent: "login" | "register"): Promise<{ user_id: string; is_new_user: boolean }> {
+  return request("/api/auth/phone/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phone, code, intent }),
+  });
+}
+
 export function getSession(signal?: AbortSignal): Promise<AuthSession> {
   return request<AuthSession>("/api/auth/session", { signal });
 }
@@ -81,6 +97,10 @@ export function updateProfile(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
+}
+
+export function logout(): Promise<void> {
+  return request<void>("/api/auth/logout", { method: "POST" });
 }
 
 export function getCategories(): Promise<{ categories: LifeEventCategory[] }> {
@@ -290,6 +310,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       response.status,
     );
   }
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 

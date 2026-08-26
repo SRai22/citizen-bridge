@@ -13,5 +13,5 @@ test("explains coordinator context and limitations", () => {
   }} />);
   expect(screen.getByText(/Acting for: Kamala Devi/)).toBeInTheDocument();
   expect(screen.getByText(/Cannot approve legal declarations/)).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Switch to my services" })).toHaveAttribute("href", "/");
+  expect(screen.getByRole("link", { name: "Switch to my services" })).toHaveAttribute("href", "/services");
 });

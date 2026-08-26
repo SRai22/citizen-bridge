@@ -1,6 +1,7 @@
 import asyncio
 import hmac
 import json
+import secrets
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
@@ -45,6 +46,10 @@ from app.schemas import (
     FamilyMemberResponse,
     FamilyMemberUpdate,
     LoginRequest,
+    PhoneOtpRequest,
+    PhoneOtpResponse,
+    PhoneOtpVerify,
+    PhoneTokenResponse,
     ProfileFieldUpdate,
     ProvenanceDecision,
     ProvenanceResponse,
@@ -228,6 +233,68 @@ async def login(
     )
     await session.commit()
     return TokenResponse(user_id=user.id, access_token=access, refresh_token=refresh)
+
+
+@router.post("/phone/request", response_model=PhoneOtpResponse)
+def request_phone_otp(payload: PhoneOtpRequest) -> PhoneOtpResponse:
+    demo_code = settings.otp_demo_code
+    if demo_code is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "OTP delivery is not configured")
+    return PhoneOtpResponse(demo_code=demo_code.get_secret_value())
+
+
+@router.post("/phone/verify", response_model=PhoneTokenResponse)
+async def verify_phone_otp(
+    payload: PhoneOtpVerify,
+    request: Request,
+    session: SessionDep,
+    publisher: PublisherDep,
+) -> PhoneTokenResponse:
+    key = f"otp:{payload.phone}"
+    if await login_limiter.is_limited(key):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Too many verification attempts")
+    configured = settings.otp_demo_code
+    if configured is None or not hmac.compare_digest(payload.code, configured.get_secret_value()):
+        await login_limiter.record_failure(key)
+        raise _unauthorized("The verification code is incorrect or expired")
+    await login_limiter.clear(key)
+
+    user = await session.scalar(select(User).where(User.phone == payload.phone))
+    if payload.intent == "login" and user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No account uses this phone number")
+    if payload.intent == "register" and user is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "An account already uses this phone number")
+
+    is_new_user = user is None
+    if user is None:
+        digits = payload.phone.removeprefix("+91")
+        user = User(
+            username=f"phone_{digits}",
+            phone=payload.phone,
+            password_hash=await asyncio.to_thread(hash_password, secrets.token_urlsafe(32)),
+        )
+        session.add(user)
+        await session.flush()
+    if not user.is_active:
+        raise _unauthorized("This account is not active")
+
+    access, refresh_token, expires_at = tokens.issue_pair(user.id, user.username)
+    session.add(
+        RefreshToken(
+            user_id=user.id,
+            token_hash=token_digest(refresh_token),
+            expires_at=expires_at,
+            device_info=_device_info(request),
+        )
+    )
+    await publisher.publish(_event("user.registered" if is_new_user else "user.logged_in", user))
+    await session.commit()
+    return PhoneTokenResponse(
+        user_id=user.id,
+        access_token=access,
+        refresh_token=refresh_token,
+        is_new_user=is_new_user,
+    )
 
 
 @router.post("/refresh", response_model=AccessTokenResponse)

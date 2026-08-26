@@ -1,43 +1,49 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useState } from "react";
 
+import { logout } from "@/lib/api";
+
 export const navigation = [
-  { href: "/", label: "My Services", icon: "⌂" },
+  { href: "/services", label: "My Services", icon: "⌂" },
   { href: "/documents", label: "My Documents", icon: "▤" },
   { href: "/benefits", label: "My Benefits", icon: "◇" },
   { href: "/applications", label: "My Applications", icon: "✓" },
   { href: "/family", label: "My Family", icon: "♧" },
   { href: "/life-events", label: "Active Life Events", icon: "◎" },
   { href: "/activity", label: "Recent Activity", icon: "↻" },
+  { href: "/profile", label: "My Profile", icon: "♙" },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
-  if (pathname.startsWith("/onboarding") || pathname.endsWith("/review")) return children;
+  if (["/", "/login", "/register", "/onboarding"].includes(pathname) || pathname.endsWith("/review")) return children;
 
   return (
     <div className="min-h-screen bg-slate-50 md:flex">
       <SideNav collapsed={collapsed} onCollapse={() => setCollapsed(!collapsed)} />
       <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur md:hidden">
+        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur sm:px-8">
           <button
             aria-controls="mobile-navigation"
             aria-expanded={drawerOpen}
             aria-label="Open navigation"
-            className="grid size-11 place-items-center rounded-xl border border-slate-200 text-xl text-slate-800"
+            className="grid size-11 place-items-center rounded-xl border border-slate-200 text-xl text-slate-800 md:hidden"
             onClick={() => setDrawerOpen(true)}
             type="button"
           >
             ☰
           </button>
-          <Brand compact />
+          {pathname !== "/" ? <button aria-label="Go back" className="rounded-xl px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100" onClick={() => router.back()} type="button">← Back</button> : null}
+          <div className="md:hidden"><Brand compact /></div>
+          <Link className="ml-auto rounded-xl px-3 py-2 text-sm font-bold text-teal-800 hover:bg-teal-50" href="/profile">My Profile</Link>
         </header>
         <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-9">{children}</main>
       </div>
@@ -64,6 +70,7 @@ export function SideNav({
           <NavItem collapsed={collapsed} item={item} key={item.href} />
         ))}
       </nav>
+      <AccountActions collapsed={collapsed} />
       <button
         aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         className="m-3 rounded-xl border border-white/15 px-3 py-2 text-sm text-slate-300 hover:bg-white/10 hover:text-white"
@@ -104,14 +111,36 @@ export function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => 
             ×
           </button>
         </div>
-        <nav aria-label="Mobile navigation" className="mt-5 space-y-1">
+        <nav aria-label="Mobile navigation" className="mt-5 flex-1 space-y-1">
           {navigation.map((item) => (
             <NavItem item={item} key={item.href} onNavigate={onClose} />
           ))}
         </nav>
+        <AccountActions onNavigate={onClose} />
       </aside>
     </div>
   );
+}
+
+function AccountActions({ collapsed = false, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+
+  async function signOut() {
+    setBusy(true);
+    try {
+      await logout();
+    } catch {
+      // Local logout must still work while the auth service is unavailable.
+    } finally {
+      localStorage.removeItem("citizen-bridge:onboarding");
+      onNavigate?.();
+      router.replace("/");
+      router.refresh();
+    }
+  }
+
+  return <button className="mx-3 flex min-h-12 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-60" disabled={busy} onClick={() => void signOut()} title={collapsed ? "Log out" : undefined} type="button"><span aria-hidden="true" className="grid size-7 shrink-0 place-items-center text-lg">↪</span>{collapsed ? <span className="sr-only">Log out</span> : <span>{busy ? "Logging out…" : "Log out"}</span>}</button>;
 }
 
 export function NavItem({
@@ -127,7 +156,7 @@ export function NavItem({
   const lifeEventRoute = item.href === "/life-events" && pathname.startsWith("/case/");
   const active =
     lifeEventRoute ||
-    (item.href === "/" ? pathname === "/" : pathname.startsWith(item.href));
+    pathname.startsWith(item.href);
   return (
     <Link
       aria-current={active ? "page" : undefined}

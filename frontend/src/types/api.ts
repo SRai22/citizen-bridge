@@ -66,6 +66,7 @@ export interface AuthSession {
   name: string | null;
   date_of_birth?: string | null;
   city?: string | null;
+  state?: string | null;
   phone?: string | null;
 }
 

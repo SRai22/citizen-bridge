@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     service_version: str = "0.1.0"
     access_token_minutes: int = 15
     refresh_token_days: int = 7
+    otp_demo_code: SecretStr | None = None
     deletion_cooling_off_days: int = 7
     deletion_check_seconds: int = 60
     otel_enabled: bool = False

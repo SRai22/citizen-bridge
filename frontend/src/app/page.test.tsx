@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
 import { ServicesHome } from "@/components/services-home";
+import Home from "./page";
 
 const { replace, router } = vi.hoisted(() => {
   const stableReplace = vi.fn();
@@ -13,6 +14,13 @@ vi.mock("next/navigation", () => ({ useRouter: () => router }));
 afterEach(() => {
   vi.restoreAllMocks();
   replace.mockReset();
+});
+
+test("offers public login and registration before onboarding", () => {
+  render(<Home />);
+  expect(screen.getByRole("heading", { name: /One place for services/ })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
+  expect(screen.getByRole("link", { name: "Register" })).toHaveAttribute("href", "/register");
 });
 
 test("loads the signed-in user's service categories and starts intake", async () => {
@@ -82,5 +90,5 @@ test("sends a new user to onboarding", async () => {
 
   render(<ServicesHome />);
 
-  await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/onboarding"));
+  await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
 });

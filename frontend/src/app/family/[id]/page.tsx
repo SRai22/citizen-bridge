@@ -158,7 +158,7 @@ export default function FamilyMemberDetailPage() {
           <p className="mt-3 text-sm text-slate-500">No active cases for {member.name}.</p>
         )}
         <div className="mt-4">
-          <Link className="text-sm font-bold text-teal-700 hover:text-teal-900" href="/">
+          <Link className="text-sm font-bold text-teal-700 hover:text-teal-900" href="/services">
             Start a service for {member.name} →
           </Link>
         </div>

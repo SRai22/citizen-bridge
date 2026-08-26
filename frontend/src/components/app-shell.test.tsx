@@ -1,12 +1,28 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { expect, test, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, expect, test, vi } from "vitest";
 
 import { AppShell, navigation } from "./app-shell";
 
 let pathname = "/documents";
-vi.mock("next/navigation", () => ({ usePathname: () => pathname }));
+const { back, refresh, replace, router } = vi.hoisted(() => ({
+  back: vi.fn(),
+  refresh: vi.fn(),
+  replace: vi.fn(),
+  router: { back: vi.fn(), refresh: vi.fn(), replace: vi.fn() },
+}));
+router.back = back;
+router.refresh = refresh;
+router.replace = replace;
+vi.mock("next/navigation", () => ({ usePathname: () => pathname, useRouter: () => router }));
 
-test("provides all seven sections, active state, collapse, and mobile drawer", () => {
+afterEach(() => {
+  back.mockReset();
+  refresh.mockReset();
+  replace.mockReset();
+  vi.restoreAllMocks();
+});
+
+test("provides navigation, back action, collapse, and mobile drawer", () => {
   render(
     <AppShell>
       <p>Page content</p>
@@ -21,6 +37,8 @@ test("provides all seven sections, active state, collapse, and mobile drawer", (
     "page",
   );
   expect(screen.getByText("Page content")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Go back" }));
+  expect(back).toHaveBeenCalledOnce();
 
   fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
   expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeInTheDocument();
@@ -34,6 +52,16 @@ test("provides all seven sections, active state, collapse, and mobile drawer", (
     "aria-expanded",
     "false",
   );
+});
+
+test("logs out locally and returns to onboarding when auth is unavailable", async () => {
+  vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Network error"));
+  render(<AppShell><p>Page content</p></AppShell>);
+
+  fireEvent.click(screen.getAllByRole("button", { name: "Log out" })[0]);
+
+  await waitFor(() => expect(replace).toHaveBeenCalledWith("/"));
+  expect(refresh).toHaveBeenCalledOnce();
 });
 
 test("keeps onboarding outside the authenticated shell", () => {

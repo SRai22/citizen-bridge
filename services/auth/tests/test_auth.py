@@ -104,6 +104,44 @@ async def test_phone_registration_can_resume_profile_completion(api_context) -> 
 
 
 @pytest.mark.asyncio
+async def test_phone_otp_registers_and_then_logs_in(api_context) -> None:
+    client, publisher, _ = api_context
+    phone = "+919876543210"
+
+    requested = await client.post(
+        "/api/auth/phone/request", json={"phone": phone, "intent": "register"}
+    )
+    assert requested.status_code == 200
+    assert requested.json()["demo_code"] == "123456"
+
+    invalid = await client.post(
+        "/api/auth/phone/verify",
+        json={"phone": phone, "intent": "register", "code": "000000"},
+    )
+    assert invalid.status_code == 401
+
+    registered = await client.post(
+        "/api/auth/phone/verify",
+        json={"phone": phone, "intent": "register", "code": "123456"},
+    )
+    assert registered.status_code == 200
+    assert registered.json()["is_new_user"] is True
+    assert publisher.events[-1]["event_type"] == "user.registered"
+
+    duplicate = await client.post(
+        "/api/auth/phone/request", json={"phone": phone, "intent": "register"}
+    )
+    assert duplicate.status_code == 200
+    logged_in = await client.post(
+        "/api/auth/phone/verify",
+        json={"phone": phone, "intent": "login", "code": "123456"},
+    )
+    assert logged_in.status_code == 200
+    assert logged_in.json()["is_new_user"] is False
+    assert publisher.events[-1]["event_type"] == "user.logged_in"
+
+
+@pytest.mark.asyncio
 async def test_progressive_profile_enrichment_and_provenance(api_context) -> None:
     client, publisher, _ = api_context
     registered = await client.post("/api/auth/register", json=REGISTRATION)

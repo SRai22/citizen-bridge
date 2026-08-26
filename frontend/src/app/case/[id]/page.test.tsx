@@ -101,5 +101,5 @@ test("summarizes a fully completed case", async () => {
   expect(await screen.findByRole("heading", { name: "All done!" })).toBeInTheDocument();
   expect(screen.getByText("Death Certificate")).toBeInTheDocument();
   expect(screen.getByText("• Obtain Death Certificate")).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Back to My Services" })).toHaveAttribute("href", "/");
+  expect(screen.getByRole("link", { name: "Back to My Services" })).toHaveAttribute("href", "/services");
 });

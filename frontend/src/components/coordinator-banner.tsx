@@ -11,7 +11,7 @@ export function CoordinatorBanner({ citizenCase }: { citizenCase: CaseOverview }
           <p className="font-bold">Acting for: {citizenCase.subject.name} ({citizenCase.subject.relationship})</p>
           <p className="mt-1 text-sm">Your role: Case Coordinator · You can gather documents, prepare information, submit, and track progress.</p>
         </div>
-        <Link className="shrink-0 text-sm font-bold text-cyan-800 underline-offset-4 hover:underline" href="/">Switch to my services</Link>
+        <Link className="shrink-0 text-sm font-bold text-cyan-800 underline-offset-4 hover:underline" href="/services">Switch to my services</Link>
       </div>
       {citizenCase.limitations.length ? (
         <p className="mt-3 border-t border-cyan-200 pt-3 text-sm">

@@ -45,16 +45,19 @@ export async function proxyBackendRequest(
     let payload = await response.text();
     if (response.ok && isSessionStart(backendPath)) {
       rotatedTokens = JSON.parse(payload) as Tokens;
-      payload = JSON.stringify({ user_id: rotatedTokens.user_id });
+      payload = JSON.stringify({
+        user_id: rotatedTokens.user_id,
+        ...(typeof rotatedTokens.is_new_user === "boolean"
+          ? { is_new_user: rotatedTokens.is_new_user }
+          : {}),
+      });
     }
+    if (backendPath === "/api/auth/logout") return localLogoutResponse();
     const result = backendResponse(response, payload);
     if (rotatedTokens) setTokenCookies(result, request, rotatedTokens);
-    if (backendPath === "/api/auth/logout") {
-      result.cookies.delete("access_token");
-      result.cookies.delete("refresh_token");
-    }
     return result;
   } catch {
+    if (backendPath === "/api/auth/logout") return localLogoutResponse();
     return NextResponse.json(
       { detail: "The Citizen Bridge service is currently unreachable." },
       { status: 503 },
@@ -62,10 +65,18 @@ export async function proxyBackendRequest(
   }
 }
 
+function localLogoutResponse() {
+  const response = new NextResponse(null, { status: 204 });
+  response.cookies.delete("access_token");
+  response.cookies.delete("refresh_token");
+  return response;
+}
+
 interface Tokens {
   user_id?: string;
   access_token: string;
   refresh_token: string;
+  is_new_user?: boolean;
 }
 
 function backendFetch(
@@ -103,7 +114,7 @@ function canRefresh(path: string) {
 }
 
 function isSessionStart(path: string) {
-  return path === "/api/auth/login" || path === "/api/auth/register";
+  return path === "/api/auth/login" || path === "/api/auth/register" || path === "/api/auth/phone/verify";
 }
 
 function setTokenCookies(result: NextResponse, request: NextRequest, tokens: Tokens) {

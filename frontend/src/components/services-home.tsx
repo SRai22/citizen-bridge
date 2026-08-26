@@ -52,7 +52,7 @@ export function ServicesHome() {
       .catch((reason: unknown) => {
         if (reason instanceof Error && reason.name === "AbortError") return;
         if (reason instanceof ApiError && reason.status === 401) {
-          router.replace("/onboarding");
+          router.replace("/login");
           return;
         }
         setError(reason instanceof ApiError ? reason.message : "Something unexpected went wrong.");
@@ -105,7 +105,7 @@ export function ServicesHome() {
       <section className="mt-8" aria-labelledby="start-service-heading">
         <p className="text-sm font-bold uppercase tracking-[0.16em] text-teal-700">Start a service</p>
         <h2 className="mt-1 text-2xl font-bold text-slate-950" id="start-service-heading">What changed in your life?</h2>
-        {activeCases === 0 ? <div className="mt-5"><EmptyState title="Browse services by life situation" description="Browse government services organized by life situation. Start when you need help." action={{ label: "Browse services", href: "/#service-options" }} /></div> : null}
+        {activeCases === 0 ? <div className="mt-5"><EmptyState title="Browse services by life situation" description="Browse government services organized by life situation. Start when you need help." action={{ label: "Browse services", href: "/services#service-options" }} /></div> : null}
         {showTip ? <aside className="mt-5 flex items-start justify-between gap-4 rounded-2xl border border-cyan-200 bg-cyan-50 p-4 text-sm leading-6 text-cyan-950"><p>💡 <strong>Tip:</strong> Choose a life situation below to see how we can help. Most citizens start with something specific, such as family paperwork or applying for a benefit.</p><button aria-label="Dismiss tip" className="shrink-0 font-bold" onClick={() => setShowTip(false)} type="button">×</button></aside> : null}
         {visibleCategories.length ? (
           <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4" id="service-options">
