@@ -1,3 +1,4 @@
+![Logo](frontend/public/citizen-bridge-logo.png)
 # Citizen Bridge
 
 Your agent across all Indian public services.
