@@ -31,6 +31,7 @@ workflows:
     description: Register a death and obtain the official death certificate.
     adapter_type: death_certificate
     applicability_rules:
+      - {field: category_id, equals: bereavement}
       - {field: deceased.is_deceased, equals: true}
       - {field: location.state, equals: Karnataka}
     tasks:
@@ -43,6 +44,7 @@ workflows:
     description: Transfer a deceased pensioner's family pension to the surviving spouse.
     adapter_type: family_pension
     applicability_rules:
+      - {field: category_id, equals: bereavement}
       - {field: deceased.pension_status, equals: active}
       - {field: surviving_spouse.exists, equals: true}
     tasks:
@@ -55,6 +57,7 @@ workflows:
     description: Transfer a Bengaluru electricity connection to an heir.
     adapter_type: bescom
     applicability_rules:
+      - {field: category_id, equals: bereavement}
       - {field: assets.bescom, equals: true}
       - {field: deceased.was_electricity_account_holder, equals: true}
     tasks:
@@ -67,6 +70,7 @@ workflows:
     description: Remove the deceased member and appoint a new household head.
     adapter_type: ration_card
     applicability_rules:
+      - {field: category_id, equals: bereavement}
       - {field: assets.ration_card, equals: true}
       - {field: deceased.was_head_of_household, equals: true}
     tasks:
@@ -80,6 +84,7 @@ workflows:
     adapter_type: legal_heir_certificate
     dynamic: true
     applicability_rules:
+      - {field: category_id, equals: bereavement}
       - {field: deceased.is_deceased, equals: true}
     tasks:
       - {id: legal_heir_application, name: Apply for Legal Heir Certificate, estimated_duration_days: 14}
@@ -91,7 +96,9 @@ workflows:
     id: birth_certificate
     description: Register a child's birth and obtain the official certificate.
     adapter_type: birth_certificate
-    applicability_rules: [{field: baby.name, exists: true}]
+    applicability_rules:
+      - {field: category_id, equals: new_baby}
+      - {field: baby.name, exists: true}
     tasks: [{id: birth_registration, name: Register Birth, estimated_duration_days: 7}]
     inter_workflow_dependencies: []
     stages: *known_stages
@@ -101,7 +108,9 @@ workflows:
     id: aadhaar_enrollment
     description: Enroll a child for Aadhaar.
     adapter_type: aadhaar_enrollment
-    applicability_rules: [{field: baby.dob, exists: true}]
+    applicability_rules:
+      - {field: category_id, equals: new_baby}
+      - {field: baby.dob, exists: true}
     tasks: [{id: aadhaar_registration, name: Enroll for Aadhaar, estimated_duration_days: 30}]
     inter_workflow_dependencies: [birth_certificate]
     typical_duration_days: [15, 30]
@@ -110,7 +119,9 @@ workflows:
     id: vaccination_registration
     description: Register a child for public vaccinations.
     adapter_type: vaccination_registration
-    applicability_rules: [{field: baby.dob, exists: true}]
+    applicability_rules:
+      - {field: category_id, equals: new_baby}
+      - {field: baby.dob, exists: true}
     tasks: [{id: vaccination_signup, name: Register Vaccination Schedule, estimated_duration_days: 3}]
     inter_workflow_dependencies: [birth_certificate]
     stages: []
@@ -178,7 +189,9 @@ workflows:
     id: marriage_certificate
     description: Register a marriage and obtain the official certificate.
     adapter_type: marriage_certificate
-    applicability_rules: [{field: marriage.spouse1, exists: true}]
+    applicability_rules:
+      - {field: category_id, equals: marriage}
+      - {field: marriage.spouse1, exists: true}
     tasks: [{id: marriage_registration, name: Register Marriage, estimated_duration_days: 30}]
     inter_workflow_dependencies: []
     stages: *known_stages

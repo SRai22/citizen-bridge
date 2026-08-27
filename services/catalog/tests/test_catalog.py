@@ -70,6 +70,7 @@ async def test_catalog_grpc_api() -> None:
     assert json.loads(workflow.definition_json)["id"] == "death_certificate"
 
     profile = {
+        "category_id": "bereavement",
         "deceased": {
             "is_deceased": True,
             "pension_status": "active",
@@ -92,12 +93,45 @@ async def test_catalog_grpc_api() -> None:
 
     for profile, expected in (
         (
-            {"baby": {"name": "Anaya Rao", "dob": "2026-08-20"}},
+            {
+                "category_id": "new_baby",
+                "baby": {"name": "Anaya Rao", "dob": "2026-08-20"},
+            },
             {"birth_certificate", "aadhaar_enrollment", "vaccination_registration"},
         ),
-        ({"marriage": {"spouse1": "Meera Rao"}}, {"marriage_certificate"}),
+        (
+            {"category_id": "marriage", "marriage": {"spouse1": "Meera Rao"}},
+            {"marriage_certificate"},
+        ),
     ):
         result = await servicer.ListApplicableWorkflows(
             catalog_pb2.ProfileContext(profile_json=json.dumps(profile)), None
         )
         assert {json.loads(item.definition_json)["id"] for item in result.workflows} == expected
+
+
+@pytest.mark.parametrize(
+    ("category_id", "expected"),
+    [
+        ("new_baby", {"birth_certificate", "aadhaar_enrollment", "vaccination_registration"}),
+        ("marriage", {"marriage_certificate"}),
+        ("bereavement", {"death_certificate", "family_pension", "bescom_transfer", "ration_card"}),
+    ],
+)
+def test_workflow_matching_does_not_cross_categories(category_id, expected) -> None:
+    mixed_profile = {
+        "category_id": category_id,
+        "baby": {"name": "Anaya Rao", "dob": "2026-08-20"},
+        "marriage": {"spouse1": "Meera Rao"},
+        "deceased": {
+            "is_deceased": True,
+            "pension_status": "active",
+            "was_electricity_account_holder": True,
+            "was_head_of_household": True,
+        },
+        "surviving_spouse": {"exists": True},
+        "location": {"state": "Karnataka"},
+        "assets": {"bescom": True, "ration_card": True},
+    }
+
+    assert {workflow.id for workflow in catalog.applicable_workflows(mixed_profile)} == expected

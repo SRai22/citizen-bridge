@@ -43,7 +43,7 @@ def test_walking_skeleton_repeats_three_times_under_thirty_seconds() -> None:
         assert catalog["categories"][0]["title"] == "Someone Passed Away"
 
         status, intake = request_json(
-            client, "POST", "/api/intake/start", {"category_id": "address_change"}
+            client, "POST", "/api/intake/start", {"category_id": "bereavement"}
         )
         assert status == 201
         session_id = intake["conversation_id"]
@@ -76,8 +76,21 @@ def test_walking_skeleton_repeats_three_times_under_thirty_seconds() -> None:
             "/api/cases",
             {
                 "life_event": {
-                    "type": "address_change",
-                    "context": {"category_id": "address_change"},
+                    "type": "bereavement",
+                    "context": {
+                        "category_id": "bereavement",
+                        "deceased": {
+                            "is_deceased": True,
+                            "pension_status": profile["deceased"]["pension_status"],
+                            "was_electricity_account_holder": profile["assets"]["bescom"],
+                            "was_head_of_household": True,
+                        },
+                        "surviving_spouse": {
+                            "exists": bool(profile["surviving_members"])
+                        },
+                        "location": {"state": profile["location"]["state"]},
+                        "assets": profile["assets"],
+                    },
                 },
                 "household_profile": {
                     "location_city": profile["location"]["city"],
@@ -87,7 +100,7 @@ def test_walking_skeleton_repeats_three_times_under_thirty_seconds() -> None:
                                 "name": profile["deceased"]["name"],
                                 "relationship": profile["deceased"]["relationship"],
                                 "role": None,
-                                "is_deceased": False,
+                                "is_deceased": True,
                                 "attributes": {
                                     "occupation": profile["deceased"]["occupation"],
                                     "pension_status": profile["deceased"]["pension_status"],

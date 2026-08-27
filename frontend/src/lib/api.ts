@@ -138,6 +138,13 @@ export async function confirmIntake(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ profile_confirmed: true }),
   });
+  const profileMatchesCategory =
+    (categoryId === "bereavement" && "deceased" in profile)
+    || (categoryId === "new_baby" && "baby" in profile)
+    || (categoryId === "marriage" && "spouse1" in profile);
+  if (!profileMatchesCategory) {
+    throw new ApiError(`Intake profile does not match category: ${categoryId}`);
+  }
   if (!("deceased" in profile)) {
     const context = "baby" in profile
       ? { category_id: categoryId, ...profile }

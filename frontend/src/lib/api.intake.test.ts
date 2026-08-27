@@ -2,7 +2,7 @@ import { afterEach, expect, test, vi } from "vitest";
 
 import type { NewBabyProfile } from "@/types/api";
 
-import { confirmIntake } from "./api";
+import { ApiError, confirmIntake } from "./api";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -27,4 +27,21 @@ test("creates baby cases with baby workflow context and no BESCOM data", async (
   expect(payload.life_event.context).toMatchObject({ category_id: "new_baby", ...profile });
   expect(payload.life_event.context).not.toHaveProperty("assets");
   expect(payload).not.toHaveProperty("household_profile");
+});
+
+test("rejects a profile returned for the wrong intake category", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(Response.json({
+    profile: {
+      spouse1: "Asha Rao",
+      spouse2: "Vikram Rao",
+      marriage_date: "2026-08-20",
+      marriage_place: "Bengaluru",
+      location: { city: "Bengaluru", state: "Karnataka" },
+    },
+  }));
+
+  await expect(confirmIntake("conversation-1", "new_baby")).rejects.toEqual(
+    new ApiError("Intake profile does not match category: new_baby"),
+  );
+  expect(fetchMock).toHaveBeenCalledTimes(1);
 });

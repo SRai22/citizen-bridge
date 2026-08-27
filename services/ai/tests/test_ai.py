@@ -54,6 +54,20 @@ def auth(user_id) -> dict[str, str]:
 
 
 @pytest.mark.asyncio
+async def test_intake_rejects_future_scope_categories(ai_context) -> None:
+    client, _, events = ai_context
+    response = await client.post(
+        "/api/ai/intake/start",
+        json={"category_id": "address_change"},
+        headers=auth(uuid4()),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Unsupported intake category: address_change"
+    assert events.events == []
+
+
+@pytest.mark.asyncio
 async def test_mock_intake_persists_and_confirms_profile(ai_context) -> None:
     client, sessions, events = ai_context
     user_id = uuid4()

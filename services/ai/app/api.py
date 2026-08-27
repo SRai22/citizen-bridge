@@ -84,15 +84,18 @@ async def start(
         citizen = await auth.get_user(str(user_id))
     except ConnectionError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
-    return await start_intake(
-        session,
-        events,
-        user_id,
-        payload.category_id,
-        model,
-        citizen.name or citizen.username,
-        citizen.city,
-    )
+    try:
+        return await start_intake(
+            session,
+            events,
+            user_id,
+            payload.category_id,
+            model,
+            citizen.name or citizen.username,
+            citizen.city,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
 
 @router.post("/intake/{conversation_id}/message", response_model=ConversationResponse)

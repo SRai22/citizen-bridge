@@ -4,15 +4,21 @@ import { afterEach, expect, test, vi } from "vitest";
 import { ServicesHome } from "@/components/services-home";
 import Home from "./page";
 
-const { replace, router } = vi.hoisted(() => {
+const { push, replace, router } = vi.hoisted(() => {
+  const stablePush = vi.fn();
   const stableReplace = vi.fn();
-  return { replace: stableReplace, router: { replace: stableReplace } };
+  return {
+    push: stablePush,
+    replace: stableReplace,
+    router: { push: stablePush, replace: stableReplace },
+  };
 });
 
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
 afterEach(() => {
   vi.restoreAllMocks();
+  push.mockReset();
   replace.mockReset();
 });
 
@@ -91,4 +97,42 @@ test("sends a new user to onboarding", async () => {
   render(<ServicesHome />);
 
   await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
+});
+
+test("routes future workflows to the demo availability page", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const url = String(input);
+    if (url.endsWith("/api/auth/session")) {
+      return Promise.resolve(Response.json({
+        user_id: "user-1",
+        username: "asha",
+        name: "Asha Rao",
+        date_of_birth: "1992-04-03",
+        city: "Bengaluru",
+      }));
+    }
+    if (url.endsWith("/api/catalog/categories")) {
+      return Promise.resolve(Response.json({ categories: [{
+        id: "address_change",
+        title: "Moving to a New Address",
+        subtitle: "Utilities and records",
+        icon: "home",
+        description: "Update records.",
+        service_count: 4,
+      }] }));
+    }
+    if (url.endsWith("/api/catalog/services")) {
+      return Promise.resolve(Response.json({ services: [] }));
+    }
+    if (url.endsWith("/api/cases")) {
+      return Promise.resolve(Response.json({ cases: [] }));
+    }
+    return Promise.reject(new Error(`Unexpected request: ${url}`));
+  });
+
+  render(<ServicesHome />);
+  fireEvent.click(await screen.findByRole("button", { name: /Moving to a New Address/ }));
+  fireEvent.click(screen.getByRole("button", { name: "View demo availability →" }));
+
+  expect(push).toHaveBeenCalledWith("/services/coming-soon/address_change");
 });

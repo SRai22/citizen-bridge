@@ -8,7 +8,8 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
-os.environ.setdefault("AI_MOCK_MODE", "true")
+# Tests must stay deterministic even when the developer's compose environment uses live OpenAI.
+os.environ["AI_MOCK_MODE"] = "true"
 os.environ.setdefault("OTEL_ENABLED", "false")
 
 from app.api import auth_client, provider, publisher

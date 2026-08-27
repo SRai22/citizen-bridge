@@ -16,6 +16,8 @@ const serviceGroups = [
   ["identity", "Identity"],
 ] as const;
 
+const DEMO_INTAKE_CATEGORIES = new Set(["bereavement", "new_baby", "marriage"]);
+
 export function ServicesHome() {
   const router = useRouter();
   const [session, setSession] = useState<AuthSession | null>(null);
@@ -85,7 +87,18 @@ export function ServicesHome() {
         <p className="mt-6 text-sm font-bold uppercase tracking-[0.16em] text-teal-700">Your next step</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">{selected.title}</h1>
         <p className="mt-4 text-lg leading-8 text-slate-600">We’ll help you handle {selected.title.toLocaleLowerCase()}. Let’s understand your situation.</p>
-        <button className="mt-8 rounded-xl bg-teal-700 px-6 py-3.5 font-bold text-white hover:bg-teal-800" onClick={() => setChatOpen(true)} type="button">Start conversation →</button>
+        <button
+          className="mt-8 rounded-xl bg-teal-700 px-6 py-3.5 font-bold text-white hover:bg-teal-800"
+          onClick={() => {
+            if (DEMO_INTAKE_CATEGORIES.has(selected.id)) setChatOpen(true);
+            else router.push(`/services/coming-soon/${encodeURIComponent(selected.id)}`);
+          }}
+          type="button"
+        >
+          {DEMO_INTAKE_CATEGORIES.has(selected.id)
+            ? "Start conversation →"
+            : "View demo availability →"}
+        </button>
       </section>
     );
   }

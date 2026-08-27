@@ -48,6 +48,8 @@ async def start_intake(
     citizen_name: str = "",
     citizen_city: str = "",
 ) -> ConversationResponse:
+    if category_id not in PROFILE_MODELS:
+        raise ValueError(f"Unsupported intake category: {category_id}")
     opening = OPENING_MESSAGES.get(
         category_id,
         "I’m here to help. Please briefly describe what happened and who needs the service.",
