@@ -12,12 +12,20 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "cases",
-        sa.Column("owner_user_id", postgresql.UUID(as_uuid=True), nullable=True),
-        schema="cases",
-    )
-    op.create_index("ix_cases_cases_owner_user_id", "cases", ["owner_user_id"], schema="cases")
+    inspector = sa.inspect(op.get_bind())
+    columns = {column["name"] for column in inspector.get_columns("cases", schema="cases")}
+    if "owner_user_id" not in columns:
+        op.add_column(
+            "cases",
+            sa.Column("owner_user_id", postgresql.UUID(as_uuid=True), nullable=True),
+            schema="cases",
+        )
+
+    indexes = {index["name"] for index in inspector.get_indexes("cases", schema="cases")}
+    if "ix_cases_cases_owner_user_id" not in indexes:
+        op.create_index(
+            "ix_cases_cases_owner_user_id", "cases", ["owner_user_id"], schema="cases"
+        )
     op.execute(
         """
         UPDATE cases.cases AS citizen_case

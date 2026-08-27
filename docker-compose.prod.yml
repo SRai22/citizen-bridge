@@ -1,14 +1,19 @@
 name: citizen-bridge
 
-x-service-build: &service-build
-  context: .
-  dockerfile: services/service-template/Dockerfile
-
 x-service-environment: &service-environment
   KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required; copy .env.example to .env}
-  OTEL_ENABLED: "true"
-  OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+  INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN is required}
+  OTEL_ENABLED: "false"
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  networks: [citizen-bridge-net]
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
 
 x-service-depends-on: &service-depends-on
   postgres:
@@ -18,21 +23,9 @@ x-service-depends-on: &service-depends-on
   kafka-init:
     condition: service_completed_successfully
 
-x-service-defaults: &service-defaults
-  build: *service-build
-  image: citizen-bridge-service-template:local
-  profiles: [services]
-  restart: unless-stopped
-  networks: [citizen-bridge-net]
-  depends_on: *service-depends-on
-  deploy:
-    resources:
-      limits:
-        cpus: "0.50"
-        memory: 384M
-
 services:
   postgres:
+    <<: *service-defaults
     image: postgres:16.15-alpine3.24
     environment:
       POSTGRES_DB: citizen_bridge
@@ -46,7 +39,7 @@ services:
       CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD:?CATALOG_DB_PASSWORD is required}
       AI_DB_PASSWORD: ${AI_DB_PASSWORD:?AI_DB_PASSWORD is required}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
       - ./infrastructure/postgres/init-schemas.sh:/docker-entrypoint-initdb.d/10-init-schemas.sh:ro
       - ./infrastructure/postgres/schemas.sql:/opt/citizen-bridge/schemas.sql:ro
     healthcheck:
@@ -55,25 +48,24 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
-    restart: unless-stopped
-    networks: [citizen-bridge-net]
     deploy:
       resources:
         limits:
           cpus: "1.00"
-          memory: 512M
+          memory: 2G
 
   kafka:
+    <<: *service-defaults
     image: apache/kafka:4.3.1
     hostname: kafka
     environment:
       CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:29092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
@@ -82,21 +74,22 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_RETENTION_BYTES: 1073741824
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx1024m
     volumes:
-      - kafka_data:/var/lib/kafka/data
+      - kafkadata:/var/lib/kafka/data
     healthcheck:
       test: [CMD-SHELL, "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
-      interval: 10s
+      interval: 15s
       timeout: 10s
-      retries: 12
+      retries: 8
       start_period: 20s
-    restart: unless-stopped
-    networks: [citizen-bridge-net]
     deploy:
       resources:
         limits:
           cpus: "1.00"
-          memory: 768M
+          memory: 2G
 
   kafka-init:
     image: apache/kafka:4.3.1
@@ -111,97 +104,60 @@ services:
     entrypoint: [/bin/sh, /init/topics.sh]
     restart: "no"
     networks: [citizen-bridge-net]
-
-  jaeger:
-    image: jaegertracing/all-in-one:1.76.0
-    environment:
-      COLLECTOR_OTLP_ENABLED: "true"
-    ports:
-      - "${JAEGER_UI_PORT:-16686}:16686"
-      - "${OTEL_GRPC_PORT:-4317}:4317"
-    restart: unless-stopped
-    networks: [citizen-bridge-net]
-    deploy:
-      resources:
-        limits:
-          cpus: "0.50"
-          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   nginx:
+    <<: *service-defaults
     image: nginx:1.28.3-alpine3.23
-    # depends_on:
-    #   legacy-backend:
-    #     condition: service_healthy
-    environment:
-      FRONTEND_ORIGIN: ${FRONTEND_URL:-http://localhost:3000}
-      NGINX_ENVSUBST_FILTER: ^FRONTEND_ORIGIN$
     volumes:
-      - ./infrastructure/nginx/nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
-      - "${GATEWAY_PORT:-80}:80"
+      - "127.0.0.1:80:80"
+    expose: ["8080"]
     healthcheck:
       test: [CMD, wget, -qO-, http://localhost/health]
       interval: 10s
       timeout: 3s
       retries: 5
-    restart: unless-stopped
-    networks: [citizen-bridge-net]
     deploy:
       resources:
         limits:
           cpus: "0.25"
-          memory: 64M
-
-  # legacy-backend:
-  #   build:
-  #     context: ./backend
-  #     target: runner
-  #   environment:
-  #     DATABASE_URL: ${LEGACY_DATABASE_URL:-sqlite:///./data/citizen_bridge.db}
-  #     DEMO_MODE: ${DEMO_MODE:-true}
-  #     FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-  #     MOCK_AI: ${MOCK_AI:-true}
-  #     OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-  #     OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
-  #   volumes:
-  #     - citizen_bridge_data:/app/data
-  #   healthcheck:
-  #     test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-  #     interval: 10s
-  #     timeout: 3s
-  #     retries: 5
-  #     start_period: 5s
-  #   restart: unless-stopped
-  #   networks: [citizen-bridge-net]
+          memory: 128M
 
   frontend:
+    <<: *service-defaults
     build:
       context: ./frontend
       target: runner
-    depends_on:
-      nginx:
-        condition: service_healthy
+    image: citizen-bridge-frontend:prod
     environment:
-      # Port 8080 is the internal backend gateway. Port 80 serves the frontend,
-      # so using it here would loop Next.js API routes back into themselves.
       API_URL: http://nginx:8080
-    ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      NODE_ENV: production
+    expose: ["3000"]
     healthcheck:
       test: [CMD, wget, -qO-, http://127.0.0.1:3000/api/health]
-      interval: 10s
-      timeout: 3s
+      interval: 15s
+      timeout: 5s
       retries: 5
-    restart: unless-stopped
-    networks: [citizen-bridge-net]
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
 
   auth:
     <<: *service-defaults
     build:
       context: .
       dockerfile: services/auth/Dockerfile
-    image: citizen-bridge-auth:local
-    profiles: []
+    image: citizen-bridge-auth:prod
+    depends_on: *service-depends-on
     environment:
       <<: *service-environment
       SERVICE_NAME: auth
@@ -209,18 +165,21 @@ services:
       GRPC_PORT: 50051
       ACCESS_TOKEN_MINUTES: ${ACCESS_TOKEN_MINUTES:-15}
       REFRESH_TOKEN_DAYS: ${REFRESH_TOKEN_DAYS:-7}
-      OTP_DEMO_CODE: ${OTP_DEMO_CODE:-123456}
-      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN is required}
+      OTP_DEMO_CODE: ${OTP_DEMO_CODE:-}
       DATABASE_URL: postgresql+asyncpg://auth_service:${AUTH_DB_PASSWORD}@postgres:5432/citizen_bridge
     expose: ["8001", "50051"]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 512M
 
   authority:
     <<: *service-defaults
     build:
       context: .
       dockerfile: services/authority/Dockerfile
-    image: citizen-bridge-authority:local
-    profiles: []
+    image: citizen-bridge-authority:prod
     depends_on:
       <<: *service-depends-on
       auth:
@@ -230,18 +189,22 @@ services:
       SERVICE_NAME: authority
       HTTP_PORT: 8002
       GRPC_PORT: 50052
+      AUTH_GRPC_HOST: auth:50051
       EXPIRATION_CHECK_SECONDS: ${EXPIRATION_CHECK_SECONDS:-60}
-      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN is required}
       DATABASE_URL: postgresql+asyncpg://authority_service:${AUTHORITY_DB_PASSWORD}@postgres:5432/citizen_bridge
     expose: ["8002", "50052"]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 512M
 
   case-engine:
     <<: *service-defaults
     build:
       context: .
       dockerfile: services/case-engine/Dockerfile
-    image: citizen-bridge-case-engine:local
-    profiles: []
+    image: citizen-bridge-case-engine:prod
     depends_on:
       <<: *service-depends-on
       auth:
@@ -263,19 +226,22 @@ services:
       AUTHORITY_GRPC_HOST: authority:50052
       CATALOG_GRPC_HOST: catalog:50056
       DOCUMENTS_GRPC_HOST: documents:50054
-      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN is required}
       AI_GRPC_HOST: ai:50057
       DEMO_MODE: ${DEMO_MODE:-true}
       DATABASE_URL: postgresql+asyncpg://case_service:${CASE_DB_PASSWORD}@postgres:5432/citizen_bridge
     expose: ["8003", "50053"]
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
 
   documents:
     <<: *service-defaults
     build:
       context: .
       dockerfile: services/documents/Dockerfile
-    image: citizen-bridge-documents:local
-    profiles: []
+    image: citizen-bridge-documents:prod
     depends_on:
       <<: *service-depends-on
       auth:
@@ -286,17 +252,20 @@ services:
       HTTP_PORT: 8004
       GRPC_PORT: 50054
       AUTH_GRPC_HOST: auth:50051
-      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN is required}
       DATABASE_URL: postgresql+asyncpg://document_service:${DOCUMENT_DB_PASSWORD}@postgres:5432/citizen_bridge
     expose: ["8004", "50054"]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 512M
 
   notifications:
     <<: *service-defaults
     build:
       context: .
       dockerfile: services/notifications/Dockerfile
-    image: citizen-bridge-notifications:local
-    profiles: []
+    image: citizen-bridge-notifications:prod
     depends_on:
       <<: *service-depends-on
       auth:
@@ -310,33 +279,43 @@ services:
       GRPC_PORT: 50055
       AUTH_GRPC_HOST: auth:50051
       AUTHORITY_GRPC_HOST: authority:50052
-      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN is required}
       DATABASE_URL: postgresql+asyncpg://notification_service:${NOTIFICATION_DB_PASSWORD}@postgres:5432/citizen_bridge
-      ENABLE_WEBSOCKET: "true"
     expose: ["8005", "50055"]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 512M
 
   catalog:
     <<: *service-defaults
     build:
       context: .
       dockerfile: services/catalog/Dockerfile
-    image: citizen-bridge-catalog:local
-    profiles: []
+    image: citizen-bridge-catalog:prod
     environment:
-      <<: *service-environment
       SERVICE_NAME: catalog
       HTTP_PORT: 8006
       GRPC_PORT: 50056
-      DATABASE_URL: postgresql+asyncpg://catalog_service:${CATALOG_DB_PASSWORD}@postgres:5432/citizen_bridge
+      OTEL_ENABLED: "false"
     expose: ["8006", "50056"]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8006/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
 
   ai:
     <<: *service-defaults
     build:
       context: .
       dockerfile: services/ai/Dockerfile
-    image: citizen-bridge-ai:local
-    profiles: []
+    image: citizen-bridge-ai:prod
     depends_on:
       <<: *service-depends-on
       auth:
@@ -346,19 +325,37 @@ services:
       SERVICE_NAME: ai
       HTTP_PORT: 8007
       GRPC_PORT: 50057
+      AUTH_GRPC_HOST: auth:50051
       DATABASE_URL: postgresql+asyncpg://ai_service:${AI_DB_PASSWORD}@postgres:5432/citizen_bridge
-      AI_MOCK_MODE: ${AI_MOCK_MODE:-true}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY is required when AI_MOCK_MODE is false}
+      AI_MOCK_MODE: "false"
       INTAKE_MODEL: ${AI_INTAKE_MODEL:-gpt-4o-mini}
       REJECTION_MODEL: ${AI_REJECTION_MODEL:-gpt-4o}
-      AUTH_GRPC_HOST: auth:50051
     expose: ["8007", "50057"]
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
+
+  jaeger:
+    <<: *service-defaults
+    profiles: [observability]
+    image: jaegertracing/all-in-one:1.76.0
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "127.0.0.1:16686:16686"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
 
 networks:
   citizen-bridge-net:
     name: citizen-bridge-net
 
 volumes:
-  citizen_bridge_data:
-  postgres_data:
-  kafka_data:
+  pgdata:
+  kafkadata:
