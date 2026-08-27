@@ -65,7 +65,7 @@ MOCK_QUESTIONS = {
         "or property?",
     ),
     "new_baby": (
-        "What is the baby's name, date of birth, and gender?",
+        "What is the baby's name and gender?",
         "What is the other parent's name?",
         "Where was the baby born, and which city and state does the family live in?",
     ),

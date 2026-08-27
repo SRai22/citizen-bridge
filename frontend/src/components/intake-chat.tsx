@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { ProfileSummary } from "@/components/profile-summary";
 import { ApiError, confirmIntake, sendIntakeMessage, startIntake } from "@/lib/api";
-import type { IntakeHouseholdProfile } from "@/types/api";
+import type { IntakeProfile } from "@/types/api";
 import type { FamilyMember } from "@/types/api";
 
 interface ChatMessage {
@@ -20,7 +20,7 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
   const nextMessageId = useRef(0);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [profile, setProfile] = useState<IntakeHouseholdProfile | null>(null);
+  const [profile, setProfile] = useState<IntakeProfile | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [starting, setStarting] = useState(true);
@@ -108,6 +108,9 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
     );
   }
 
+  const needsBirthDate = categoryId === "new_baby" && !messages.some(({ role }) => role === "user");
+  const latestBirthDate = needsBirthDate ? localDateValue(new Date()) : undefined;
+
   return (
     <section aria-labelledby="intake-heading" className="flex min-h-[36rem] flex-col">
       <div className="border-b border-stone-200 px-5 py-6 sm:px-8">
@@ -166,15 +169,17 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
       <form className="border-t border-stone-200 bg-white p-4 sm:p-6" onSubmit={handleSubmit}>
         <div className="flex gap-3">
           <label className="sr-only" htmlFor="intake-message">
-            Your message
+            {needsBirthDate ? "Baby's date of birth" : "Your message"}
           </label>
           <input
             autoComplete="off"
             className="min-w-0 flex-1 rounded-xl border border-stone-300 bg-white px-4 py-3 text-base outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-stone-100"
             disabled={!sessionId || starting || busy}
             id="intake-message"
+            max={latestBirthDate}
             onChange={(event) => setMessage(event.target.value)}
-            placeholder="Type your answer…"
+            placeholder={needsBirthDate ? undefined : "Type your answer…"}
+            type={needsBirthDate ? "date" : "text"}
             value={message}
           />
           <button
@@ -207,6 +212,11 @@ function messageFor(reason: unknown): string {
   return reason instanceof ApiError
     ? reason.message
     : "Something unexpected went wrong. Please try again.";
+}
+
+function localDateValue(date: Date): string {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
 }
 
 function boundaryRedirect(message: string): Pick<ChatMessage, "content" | "action"> | null {

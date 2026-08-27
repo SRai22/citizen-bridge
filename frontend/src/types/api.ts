@@ -49,11 +49,32 @@ export interface IntakeHouseholdProfile {
   assets: { bescom: boolean; ration_card: boolean; property: boolean };
 }
 
+export interface NewBabyProfile {
+  baby: {
+    name: string;
+    dob: string;
+    gender: "female" | "male" | "other" | "unknown";
+  };
+  parents: string[];
+  location: { city: string; state: string };
+  birth_place: string;
+}
+
+export interface MarriageProfile {
+  spouse1: string;
+  spouse2: string;
+  marriage_date: string;
+  marriage_place: string;
+  location: { city: string; state: string };
+}
+
+export type IntakeProfile = IntakeHouseholdProfile | NewBabyProfile | MarriageProfile;
+
 export interface IntakeResponse {
   conversation_id: string;
   status: "in_progress" | "complete";
   message: string;
-  profile: IntakeHouseholdProfile | null;
+  profile: IntakeProfile | null;
 }
 
 export interface IntakeConfirmation {

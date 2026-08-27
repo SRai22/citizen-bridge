@@ -19,7 +19,7 @@ import type {
   ExternalApplication,
   FamilyMember,
   IntakeConfirmation,
-  IntakeHouseholdProfile,
+  IntakeProfile,
   IntakeResponse,
   LifeEventCategory,
   NotificationItem,
@@ -132,35 +132,39 @@ export async function confirmIntake(
   categoryId: string,
   subject: "self" | FamilyMember | null = null,
 ): Promise<IntakeConfirmation> {
-  const { profile } = await request<{ profile: IntakeHouseholdProfile }>(
+  const { profile } = await request<{ profile: IntakeProfile }>(
     `/api/intake/${encodeURIComponent(sessionId)}/confirm`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ profile_confirmed: true }),
   });
-  const bereavement = categoryId === "bereavement";
+  if (!("deceased" in profile)) {
+    const context = "baby" in profile
+      ? { category_id: categoryId, ...profile }
+      : { category_id: categoryId, marriage: profile };
+    return request<IntakeConfirmation>("/api/cases", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ life_event: { type: categoryId, context } }),
+    });
+  }
+
   const profilePeople = [profile.deceased, ...profile.surviving_members];
-  const savedFamily = bereavement
-    ? await Promise.all(
-        profilePeople.map((person, index) =>
-          addFamilyMember({
-            name: person.name,
-            relationship: person.relationship,
-            is_deceased: index === 0,
-            source: "intake",
-          }),
-        ),
-      )
-    : [];
+  const savedFamily = await Promise.all(
+    profilePeople.map((person, index) =>
+      addFamilyMember({
+        name: person.name,
+        relationship: person.relationship,
+        is_deceased: index === 0,
+        source: "intake",
+      }),
+    ),
+  );
   const selected = subject && subject !== "self" ? subject : null;
   const people = selected && !profilePeople.some((person) => person.name === selected.name)
     ? [...profilePeople, selected]
     : profilePeople;
-  const subjectIndex = bereavement
-    ? 0
-    : selected
-      ? people.findIndex((person) => person.name === selected.name)
-      : null;
+  const subjectIndex = 0;
   return request<IntakeConfirmation>("/api/cases", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -169,19 +173,15 @@ export async function confirmIntake(
         type: categoryId,
         context: {
           category_id: categoryId,
-          ...(bereavement
-            ? {
-                deceased: {
-                  is_deceased: true,
-                  pension_status: profile.deceased.pension_status,
-                  was_electricity_account_holder: profile.assets.bescom,
-                  was_head_of_household: true,
-                },
-                surviving_spouse: { exists: profile.surviving_members.length > 0 },
-                location: { state: profile.location.state },
-                assets: profile.assets,
-              }
-            : {}),
+          deceased: {
+            is_deceased: true,
+            pension_status: profile.deceased.pension_status,
+            was_electricity_account_holder: profile.assets.bescom,
+            was_head_of_household: true,
+          },
+          surviving_spouse: { exists: profile.surviving_members.length > 0 },
+          location: { state: profile.location.state },
+          assets: profile.assets,
         },
       },
       household_profile: {
@@ -197,7 +197,7 @@ export async function confirmIntake(
             name: people[0].name,
             relationship: people[0].relationship,
             role: null,
-            is_deceased: bereavement,
+            is_deceased: true,
             attributes: {
               occupation: profile.deceased.occupation,
               pension_status: profile.deceased.pension_status,
@@ -221,7 +221,8 @@ export async function confirmIntake(
           })),
         ],
       },
-      ...(subjectIndex !== null ? { subject_person_index: subjectIndex, subject_relationship: people[subjectIndex].relationship } : {}),
+      subject_person_index: subjectIndex,
+      subject_relationship: people[subjectIndex].relationship,
     }),
   });
 }
