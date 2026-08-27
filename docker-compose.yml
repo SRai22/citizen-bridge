@@ -287,6 +287,7 @@ services:
       GRPC_PORT: 50054
       AUTH_GRPC_HOST: auth:50051
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN is required}
+      DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:?DOCUMENT_ENCRYPTION_KEY is required}
       DATABASE_URL: postgresql+asyncpg://document_service:${DOCUMENT_DB_PASSWORD}@postgres:5432/citizen_bridge
     expose: ["8004", "50054"]
 

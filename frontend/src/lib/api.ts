@@ -157,20 +157,24 @@ export async function confirmIntake(
   }
 
   const profilePeople = [profile.deceased, ...profile.surviving_members];
+  const selected = subject && subject !== "self" ? subject : null;
   const savedFamily = await Promise.all(
     profilePeople.map((person, index) =>
-      addFamilyMember({
-        name: person.name,
-        relationship: person.relationship,
-        is_deceased: index === 0,
-        source: "intake",
-      }),
+      index === 0 && selected
+        ? updateFamilyMember(selected.id, {
+            is_deceased: true,
+            death_date: profile.death_date,
+          })
+        : addFamilyMember({
+            name: person.name,
+            relationship: person.relationship,
+            is_deceased: index === 0,
+            death_date: index === 0 ? profile.death_date : null,
+            source: "intake",
+          }),
     ),
   );
-  const selected = subject && subject !== "self" ? subject : null;
-  const people = selected && !profilePeople.some((person) => person.name === selected.name)
-    ? [...profilePeople, selected]
-    : profilePeople;
+  const people = profilePeople;
   const subjectIndex = 0;
   return request<IntakeConfirmation>("/api/cases", {
     method: "POST",
@@ -182,6 +186,7 @@ export async function confirmIntake(
           category_id: categoryId,
           deceased: {
             is_deceased: true,
+            date_of_death: profile.death_date,
             pension_status: profile.deceased.pension_status,
             was_electricity_account_holder: profile.assets.bescom,
             was_head_of_household: true,
@@ -455,6 +460,10 @@ export function uploadDocument(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+export function uploadDocumentFile(payload: FormData): Promise<DocEntry> {
+  return request<DocEntry>("/api/docs/upload-file", { method: "POST", body: payload });
 }
 
 export function getDocumentDetail(id: string): Promise<DocDetailEntry> {

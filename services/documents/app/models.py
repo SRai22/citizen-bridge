@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, String
+from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, LargeBinary, String
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -49,6 +49,11 @@ class Document(Base):
     metadata_: Mapped[dict[str, Any]] = mapped_column(
         "metadata", MutableDict.as_mutable(JSON), default=dict
     )
+    file_name: Mapped[str | None] = mapped_column(String(255))
+    mime_type: Mapped[str | None] = mapped_column(String(150))
+    file_size: Mapped[int | None]
+    # ponytail: encrypted DB blobs suit the MVP; move to object storage when volume grows.
+    file_content: Mapped[bytes | None] = mapped_column(LargeBinary)
     superseded_by_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("documents.documents.id", ondelete="SET NULL")
     )

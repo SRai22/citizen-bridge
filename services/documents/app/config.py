@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     kafka_bootstrap_servers: str = "kafka:9092"
     auth_grpc_host: str = "auth:50051"
     internal_service_token: SecretStr = SecretStr("")
+    document_encryption_key: SecretStr
     http_port: int = 8004
     grpc_port: int = 50054
     expiration_check_seconds: int = 3600

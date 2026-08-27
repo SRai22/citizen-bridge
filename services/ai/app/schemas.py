@@ -31,6 +31,7 @@ class HouseholdAssets(StrictModel):
 
 class BereavementProfile(StrictModel):
     deceased: PersonProfile
+    death_date: date
     surviving_members: list[PersonProfile]
     location: Location
     assets: HouseholdAssets
@@ -110,6 +111,7 @@ class ConversationResponse(BaseModel):
     conversation_id: UUID
     message: str
     status: Literal["in_progress", "complete"]
+    input_type: Literal["text", "date"] = "text"
     profile: IntakeProfile | None = None
 
 

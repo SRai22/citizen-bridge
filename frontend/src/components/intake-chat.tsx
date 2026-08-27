@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { ProfileSummary } from "@/components/profile-summary";
-import { ApiError, confirmIntake, sendIntakeMessage, startIntake } from "@/lib/api";
+import { ApiError, confirmIntake, getFamily, sendIntakeMessage, startIntake } from "@/lib/api";
 import type { IntakeProfile } from "@/types/api";
 import type { FamilyMember } from "@/types/api";
 
@@ -26,6 +26,9 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
   const [starting, setStarting] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [family, setFamily] = useState<FamilyMember[]>([]);
+  const [selectedFamilyMember, setSelectedFamilyMember] = useState<FamilyMember | null>(null);
+  const [inputType, setInputType] = useState<"text" | "date">("text");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -35,6 +38,7 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
         setMessages([
           { id: nextMessageId.current++, role: "system", content: response.message },
         ]);
+        setInputType(response.input_type ?? "text");
         setStarting(false);
       })
       .catch((reason: unknown) => {
@@ -42,12 +46,21 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
         setError(messageFor(reason));
         setStarting(false);
       });
+    if (categoryId === "bereavement") {
+      getFamily(controller.signal)
+        .then((members) => setFamily(members.filter((member) => !member.is_deceased)))
+        .catch(() => setFamily([]));
+    }
     return () => controller.abort();
   }, [attempt, categoryId]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const content = message.trim();
+    await submitMessage(message);
+  }
+
+  async function submitMessage(value: string) {
+    const content = value.trim();
     if (!content || !sessionId || busy) return;
 
     const userMessage = { id: nextMessageId.current++, role: "user" as const, content };
@@ -69,6 +82,7 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
         content: response.message,
       };
       setMessages((current) => [...current, systemMessage]);
+      setInputType(response.input_type ?? "text");
       setProfile(response.profile);
     } catch (reason) {
       setMessages((current) => current.filter(({ id }) => id !== userMessage.id));
@@ -84,7 +98,11 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
     setError(null);
     setBusy(true);
     try {
-      const confirmation = await confirmIntake(sessionId, categoryId, subject ?? null);
+      const confirmation = await confirmIntake(
+        sessionId,
+        categoryId,
+        subject ?? selectedFamilyMember,
+      );
       router.push(`/life-events/${encodeURIComponent(confirmation.case_id)}`);
     } catch (reason) {
       setError(messageFor(reason));
@@ -109,7 +127,12 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
   }
 
   const needsBirthDate = categoryId === "new_baby" && !messages.some(({ role }) => role === "user");
-  const latestBirthDate = needsBirthDate ? localDateValue(new Date()) : undefined;
+  const needsDeathDate = categoryId === "bereavement" && inputType === "date";
+  const needsDate = needsBirthDate || needsDeathDate;
+  const latestDate = needsDate ? localDateValue(new Date()) : undefined;
+  const showFamilyChoices = categoryId === "bereavement"
+    && !messages.some(({ role }) => role === "user")
+    && family.length > 0;
 
   return (
     <section aria-labelledby="intake-heading" className="flex min-h-[36rem] flex-col">
@@ -152,6 +175,26 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
             </div>
           </div>
         ))}
+        {showFamilyChoices ? (
+          <div className="flex flex-wrap gap-2" aria-label="Who passed away?">
+            {family.map((member) => (
+              <button
+                aria-label={`${member.name}, ${member.relationship}`}
+                className="rounded-xl border border-teal-700 bg-white px-4 py-2 text-left text-sm font-semibold text-teal-900 hover:bg-teal-50 disabled:opacity-50"
+                disabled={busy || !sessionId}
+                key={member.id}
+                onClick={() => {
+                  setSelectedFamilyMember(member);
+                  void submitMessage(`${member.name}, my ${member.relationship}, passed away.`);
+                }}
+                type="button"
+              >
+                <span className="block">{member.name}</span>
+                <span className="block text-xs font-normal capitalize text-slate-500">{member.relationship}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
         {busy ? (
           <div className="flex justify-start" role="status">
             <p className="rounded-2xl rounded-bl-md border border-stone-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm">
@@ -169,17 +212,17 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
       <form className="border-t border-stone-200 bg-white p-4 sm:p-6" onSubmit={handleSubmit}>
         <div className="flex gap-3">
           <label className="sr-only" htmlFor="intake-message">
-            {needsBirthDate ? "Baby's date of birth" : "Your message"}
+            {needsBirthDate ? "Baby's date of birth" : needsDeathDate ? "Date of death" : "Your message"}
           </label>
           <input
             autoComplete="off"
             className="min-w-0 flex-1 rounded-xl border border-stone-300 bg-white px-4 py-3 text-base outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-stone-100"
             disabled={!sessionId || starting || busy}
             id="intake-message"
-            max={latestBirthDate}
+            max={latestDate}
             onChange={(event) => setMessage(event.target.value)}
-            placeholder={needsBirthDate ? undefined : "Type your answer…"}
-            type={needsBirthDate ? "date" : "text"}
+            placeholder={needsDate ? undefined : "Type your answer…"}
+            type={needsDate ? "date" : "text"}
             value={message}
           />
           <button

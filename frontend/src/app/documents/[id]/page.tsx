@@ -112,12 +112,13 @@ export default function DocumentDetailPage() {
       <section className="mt-6 rounded-3xl border border-slate-100 bg-slate-50 p-5">
         <p className="text-sm font-bold text-slate-700">Actions</p>
         <div className="mt-3 flex flex-wrap gap-3">
-          <button
+          {doc.file_name ? <a
             className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100"
-            type="button"
+            download
+            href={`/api/docs/${doc.id}/download`}
           >
             Download
-          </button>
+          </a> : null}
           {doc.provenance_type === "user_uploaded" ? (
             <button
               className="rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-50"

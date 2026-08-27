@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
 os.environ.setdefault("OTEL_ENABLED", "false")
+os.environ.setdefault("DOCUMENT_ENCRYPTION_KEY", "test-only-document-encryption-key")
 
 from app.api import auth_client, publisher
 from app.db.base import Base

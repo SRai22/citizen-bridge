@@ -60,6 +60,9 @@ class DocumentResponse(BaseModel):
     source_task_id: UUID | None
     extracted_fields: dict
     metadata: dict = Field(validation_alias="metadata_")
+    file_name: str | None
+    mime_type: str | None
+    file_size: int | None
     superseded_by_id: UUID | None
     created_at: datetime
     updated_at: datetime

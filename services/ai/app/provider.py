@@ -32,6 +32,7 @@ MOCK_PROFILES = {
             occupation="retired Karnataka state government employee",
             pension_status="active",
         ),
+        death_date="2026-08-20",
         surviving_members=[
             PersonProfile(
                 name="Meera Rao",
@@ -59,8 +60,9 @@ MOCK_PROFILES = {
 }
 MOCK_QUESTIONS = {
     "bereavement": (
-        "Which city and state did the person live in?",
-        "Were they employed or retired, and were they receiving a government pension?",
+        "What was the date of death?",
+        "Which city and state did they live in, and were they employed, retired, or "
+        "receiving a government pension?",
         "Who else is in the household, and did they hold a BESCOM connection, ration card, "
         "or property?",
     ),

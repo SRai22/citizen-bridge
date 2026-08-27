@@ -4,6 +4,7 @@ x-service-environment: &service-environment
   KAFKA_BOOTSTRAP_SERVERS: kafka:9092
   JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
   INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN is required}
+  DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:?DOCUMENT_ENCRYPTION_KEY is required}
   OTEL_ENABLED: "false"
 
 x-service-defaults: &service-defaults

@@ -6,7 +6,7 @@ export async function proxyBackendRequest(
   body?: string,
 ) {
   const apiUrl = process.env.API_URL ?? "http://localhost:8000";
-  const requestBody = body ?? (request.method === "GET" ? undefined : await request.text());
+  const requestBody = body ?? (request.method === "GET" ? undefined : await request.arrayBuffer());
   const contentType = request.headers.get("content-type");
   const accessToken = request.cookies.get("access_token")?.value;
   const refreshToken = request.cookies.get("refresh_token")?.value;
@@ -42,9 +42,10 @@ export async function proxyBackendRequest(
       }
     }
 
-    let payload = await response.text();
+    const responseBody = await response.arrayBuffer();
+    let payload: BodyInit = responseBody;
     if (response.ok && isSessionStart(backendPath)) {
-      rotatedTokens = JSON.parse(payload) as Tokens;
+      rotatedTokens = JSON.parse(new TextDecoder().decode(responseBody)) as Tokens;
       payload = JSON.stringify({
         user_id: rotatedTokens.user_id,
         ...(typeof rotatedTokens.is_new_user === "boolean"
@@ -82,7 +83,7 @@ interface Tokens {
 function backendFetch(
   url: string,
   method: string,
-  body: string | undefined,
+  body: BodyInit | undefined,
   contentType: string | null,
   correlationId: string | null,
   token?: string,
@@ -94,7 +95,7 @@ function backendFetch(
   return fetch(url, { method, headers, body: body || undefined, cache: "no-store" });
 }
 
-function backendResponse(response: Response, payload: string) {
+function backendResponse(response: Response, payload: BodyInit) {
   return new NextResponse(payload, {
     status: response.status,
     headers: {

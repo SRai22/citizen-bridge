@@ -117,10 +117,16 @@ async def send_intake_message(
     if conversation.status != "active":
         raise ValueError("Conversation is no longer active")
     conversation.messages.append(message("user", content))
-    result = await provider.intake(conversation.messages, conversation.context["category_id"])
+    category_id = conversation.context["category_id"]
+    first_bereavement_answer = category_id == "bereavement" and sum(
+        item["role"] == "user" for item in conversation.messages
+    ) == 1
+    result = await provider.intake(conversation.messages, category_id)
     turn = result.value
     if not hasattr(turn, "status"):
         raise TypeError("AI provider returned the wrong response type")
+    if first_bereavement_answer and turn.status == "in_progress":
+        turn.message = "What was the date of death?"
     conversation.messages.append(message("assistant", turn.message, result.output_tokens))
     conversation.model_used = result.model
     conversation.total_tokens_used += result.input_tokens + result.output_tokens
@@ -135,6 +141,7 @@ async def send_intake_message(
         conversation_id=conversation.id,
         message=turn.message,
         status=turn.status,
+        input_type="date" if first_bereavement_answer and turn.status == "in_progress" else "text",
         profile=turn.profile,
     )
 

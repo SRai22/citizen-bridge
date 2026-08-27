@@ -98,6 +98,7 @@ services:
       AUTH_GRPC_HOST: auth:50051
       EXPIRATION_CHECK_SECONDS: 1
       INTERNAL_SERVICE_TOKEN: test-only-internal-service-token
+      DOCUMENT_ENCRYPTION_KEY: test-only-document-encryption-key
       OTEL_ENABLED: "false"
     ports: ["18002:8002"]
     depends_on:

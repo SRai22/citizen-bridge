@@ -92,8 +92,12 @@ async def test_mock_intake_persists_and_confirms_profile(ai_context) -> None:
             headers=auth(user_id),
         )
         assert response.status_code == 200
+        if turn == 0:
+            assert response.json()["message"] == "What was the date of death?"
+            assert response.json()["input_type"] == "date"
     assert response.json()["status"] == "complete"
     assert response.json()["profile"]["location"]["city"] == "Bengaluru"
+    assert response.json()["profile"]["death_date"] == "2026-08-20"
 
     confirmed = await client.post(
         f"/api/ai/intake/{conversation_id}/confirm",

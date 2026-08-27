@@ -1,11 +1,27 @@
+import base64
+import hashlib
 import hmac
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal
+from urllib.parse import quote
 from uuid import UUID
 
 from contracts.lib.observability import reset_user_id, set_user_id
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from cryptography.fernet import Fernet, InvalidToken
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
+from fastapi.responses import Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +35,7 @@ from app.models import Document, DocumentAccessLog
 from app.schemas import (
     AccessCreate,
     AccessResponse,
+    Category,
     DocumentCreate,
     DocumentResponse,
     RequirementsRequest,
@@ -73,6 +90,13 @@ async def current_user(credentials: CredentialsDep, auth: AuthDep) -> AsyncItera
 
 
 UserDep = Annotated[UUID, Depends(current_user)]
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+ALLOWED_UPLOAD_TYPES = {
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+}
 
 
 @router.get("")
@@ -129,6 +153,95 @@ async def upload(
             provenance_source="Uploaded by user",
             **values,
         ),
+    )
+
+
+@router.post("/upload-file", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+async def upload_file(
+    user_id: UserDep,
+    session: SessionDep,
+    events: PublisherDep,
+    file: Annotated[UploadFile, File()],
+    document_type: Annotated[str, Form(min_length=1, max_length=100)],
+    title: Annotated[str, Form(min_length=1, max_length=250)],
+    proof_category_value: Annotated[Category | None, Form(alias="proof_category")] = None,
+    issuer: Annotated[str | None, Form()] = None,
+    valid_until: Annotated[datetime | None, Form()] = None,
+    source: Annotated[Literal["local", "google_drive"], Form()] = "local",
+) -> Document:
+    if file.content_type not in ALLOWED_UPLOAD_TYPES:
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Upload a PDF, JPEG, PNG, or WebP image"
+        )
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Documents must be 10 MB or smaller"
+        )
+    if not content:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "The selected file is empty")
+    if not _has_valid_signature(file.content_type, content):
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            "The file contents do not match the selected file type",
+        )
+    document = await create_document(
+        session,
+        events,
+        DocumentCreate(
+            owner_user_id=user_id,
+            document_type=document_type,
+            proof_category=proof_category_value or proof_category(document_type),
+            title=title,
+            issuer=issuer or None,
+            valid_until=valid_until,
+            provenance_type="user_uploaded",
+            provenance_source=(
+                "Imported from Google Drive"
+                if source == "google_drive"
+                else "Uploaded from this device"
+            ),
+            metadata={"upload_source": source},
+        ),
+    )
+    document.file_name = (file.filename or title)[:255]
+    document.mime_type = file.content_type
+    document.file_size = len(content)
+    document.file_content = _cipher().encrypt(content)
+    await session.commit()
+    await session.refresh(document)
+    return document
+
+
+@router.get("/{document_id}/download")
+async def download(
+    document_id: UUID,
+    user_id: UserDep,
+    session: SessionDep,
+    events: PublisherDep,
+) -> Response:
+    document = await _owned_document(session, document_id, user_id)
+    if document.file_content is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This document has no uploaded file")
+    filename = quote(document.file_name or document.title)
+    try:
+        content = _cipher().decrypt(document.file_content)
+    except InvalidToken as exc:
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "The document file could not be decrypted",
+        ) from exc
+    await record_access(
+        session,
+        events,
+        document,
+        user_id,
+        AccessCreate(action="downloaded", purpose="Downloaded document file"),
+    )
+    return Response(
+        content,
+        media_type=document.mime_type or "application/octet-stream",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
     )
 
 
@@ -289,6 +402,23 @@ async def _owned_document(
 def _unauthorized(detail: str) -> HTTPException:
     return HTTPException(
         status.HTTP_401_UNAUTHORIZED, detail, headers={"WWW-Authenticate": "Bearer"}
+    )
+
+
+def _cipher() -> Fernet:
+    secret = settings.document_encryption_key.get_secret_value().encode()
+    return Fernet(base64.urlsafe_b64encode(hashlib.sha256(secret).digest()))
+
+
+def _has_valid_signature(mime_type: str, content: bytes) -> bool:
+    signatures = {
+        "application/pdf": (b"%PDF-",),
+        "image/jpeg": (b"\xff\xd8\xff",),
+        "image/png": (b"\x89PNG\r\n\x1a\n",),
+        "image/webp": (b"RIFF",),
+    }
+    return content.startswith(signatures[mime_type]) and (
+        mime_type != "image/webp" or content[8:12] == b"WEBP"
     )
 
 

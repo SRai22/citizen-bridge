@@ -1,5 +1,5 @@
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from contracts.generated import documents_pb2
@@ -77,6 +77,38 @@ async def test_document_lifecycle(document_context) -> None:
         "New Aadhaar"
     ]
     assert [event["event_type"] for event in events.events].count("document.accessed") == 2
+
+
+@pytest.mark.asyncio
+async def test_uploads_and_downloads_a_document_file(document_context) -> None:
+    client, sessions, events = document_context
+    user_id = uuid4()
+    uploaded = await client.post(
+        "/api/docs/upload-file",
+        headers=headers(user_id),
+        data={
+            "document_type": "aadhaar",
+            "title": "Aadhaar",
+            "proof_category": "identity",
+            "source": "local",
+        },
+        files={"file": ("aadhaar.pdf", b"%PDF-demo", "application/pdf")},
+    )
+
+    assert uploaded.status_code == 201, uploaded.text
+    assert uploaded.json()["file_name"] == "aadhaar.pdf"
+    assert uploaded.json()["file_size"] == 9
+    async with sessions() as session:
+        stored = await session.get(Document, UUID(uploaded.json()["id"]))
+        assert stored is not None
+        assert stored.file_content != b"%PDF-demo"
+    downloaded = await client.get(
+        f"/api/docs/{uploaded.json()['id']}/download", headers=headers(user_id)
+    )
+    assert downloaded.content == b"%PDF-demo"
+    assert downloaded.headers["content-type"] == "application/pdf"
+    assert "aadhaar.pdf" in downloaded.headers["content-disposition"]
+    assert events.events[-1]["event_type"] == "document.accessed"
 
 
 @pytest.mark.asyncio

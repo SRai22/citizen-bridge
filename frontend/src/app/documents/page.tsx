@@ -5,7 +5,8 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { ProvenanceTag } from "@/components/provenance-tag";
 import { EmptyState, ErrorState, ExpiredDocumentState, LoadingState } from "@/components/page-state";
-import { ApiError, getDocuments, uploadDocument } from "@/lib/api";
+import { ApiError, getDocuments, uploadDocumentFile } from "@/lib/api";
+import { pickGoogleDriveFile } from "@/lib/google-drive";
 import { formatDate } from "@/lib/presentation";
 import type { DocCategory, DocEntry } from "@/types/api";
 
@@ -23,6 +24,9 @@ export default function DocumentsPage() {
   const [attempt, setAttempt] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadSource, setUploadSource] = useState<"local" | "google_drive">("local");
+  const [choosingDriveFile, setChoosingDriveFile] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -55,17 +59,19 @@ export default function DocumentsPage() {
     event.preventDefault();
     const form = event.currentTarget;
     const values = new FormData(form);
+    if (!selectedFile) {
+      setUploadError("Choose a file from this device or Google Drive.");
+      return;
+    }
+    values.set("file", selectedFile);
+    values.set("source", uploadSource);
     setUploading(true);
     setUploadError(null);
     try {
-      await uploadDocument({
-        title: String(values.get("title")),
-        document_type: String(values.get("document_type")),
-        proof_category: String(values.get("proof_category")) as DocCategory,
-        issuer: String(values.get("issuer")) || undefined,
-        valid_until: values.get("valid_until") ? `${String(values.get("valid_until"))}T00:00:00` : undefined,
-      });
+      await uploadDocumentFile(values);
       form.reset();
+      setSelectedFile(null);
+      setUploadSource("local");
       setGroups(null);
       setAttempt((value) => value + 1);
     } catch (reason) {
@@ -84,6 +90,10 @@ export default function DocumentsPage() {
         </h1>
         <p className="mt-3 text-sm text-slate-500">{totalDocs} document{totalDocs !== 1 ? "s" : ""} across all categories</p>
       </section>
+
+      <aside className="mt-5 rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-4 text-sm text-cyan-950">
+        <strong>Future scope:</strong> Get verified documents directly from the DigiLocker API.
+      </aside>
 
       {totalDocs === 0 ? (
         <div className="mt-8"><EmptyState title="Keep reusable documents together" description="Documents will appear here as you use services. You can also upload your existing documents." action={{ label: "Upload a document", href: "/documents#upload" }} /></div>
@@ -115,12 +125,52 @@ export default function DocumentsPage() {
         <summary className="cursor-pointer font-bold text-teal-900">Upload an existing document</summary>
         {uploadError ? <p className="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-800" role="alert">{uploadError} Please review the details and try again.</p> : null}
         <form className="mt-5 grid gap-4 sm:grid-cols-2" onSubmit={upload}>
+          <fieldset className="sm:col-span-2">
+            <legend className="text-sm font-semibold text-slate-700">Choose where to upload from</legend>
+            <div className="mt-2 flex flex-wrap gap-3">
+              <label className={`cursor-pointer rounded-xl border px-4 py-3 text-sm font-bold ${uploadSource === "local" ? "border-teal-700 bg-white text-teal-900" : "border-slate-200 bg-white text-slate-700"}`}>
+                From this device
+                <input
+                  accept=".pdf,.jpg,.jpeg,.png,.webp"
+                  className="mt-2 block max-w-full text-xs font-normal"
+                  name="local_file"
+                  onChange={(event) => {
+                    setUploadSource("local");
+                    setSelectedFile(event.target.files?.[0] ?? null);
+                  }}
+                  type="file"
+                />
+              </label>
+              <button
+                className={`rounded-xl border px-4 py-3 text-sm font-bold ${uploadSource === "google_drive" ? "border-teal-700 bg-white text-teal-900" : "border-slate-200 bg-white text-slate-700"}`}
+                disabled={choosingDriveFile}
+                onClick={async () => {
+                  setChoosingDriveFile(true);
+                  setUploadError(null);
+                  try {
+                    const file = await pickGoogleDriveFile();
+                    setSelectedFile(file);
+                    setUploadSource("google_drive");
+                  } catch (reason) {
+                    setUploadError(reason instanceof Error ? reason.message : "Could not open Google Drive.");
+                  } finally {
+                    setChoosingDriveFile(false);
+                  }
+                }}
+                type="button"
+              >
+                {choosingDriveFile ? "Opening Google Drive…" : "Choose from Google Drive"}
+              </button>
+            </div>
+            {selectedFile ? <p className="mt-2 text-xs text-teal-800">Selected: {selectedFile.name}</p> : null}
+            <p className="mt-2 text-xs text-slate-500">PDF, JPEG, PNG, or WebP · maximum 10 MB</p>
+          </fieldset>
           <label className="text-sm font-semibold text-slate-700">Document name<input className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" name="title" required /></label>
           <label className="text-sm font-semibold text-slate-700">Document type<input className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" name="document_type" placeholder="e.g. voter_id" required /></label>
           <label className="text-sm font-semibold text-slate-700">Category<select className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" name="proof_category">{(Object.keys(CATEGORY_META) as DocCategory[]).map((category) => <option key={category} value={category}>{CATEGORY_META[category].label}</option>)}</select></label>
           <label className="text-sm font-semibold text-slate-700">Issuer (optional)<input className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" name="issuer" /></label>
           <label className="text-sm font-semibold text-slate-700">Valid until (optional)<input className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" name="valid_until" type="date" /></label>
-          <button className="self-end rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60" disabled={uploading} type="submit">{uploading ? "Adding…" : "Add document"}</button>
+          <button className="self-end rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60" disabled={uploading} type="submit">{uploading ? "Uploading…" : "Upload document"}</button>
         </form>
       </details>
     </div>

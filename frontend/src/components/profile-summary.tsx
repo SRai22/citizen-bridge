@@ -98,6 +98,7 @@ function BereavementDetails({ profile }: { profile: IntakeHouseholdProfile }) {
         <p className="mt-1 text-sm capitalize text-slate-600">
           {profile.deceased.relationship} · {profile.deceased.occupation}
         </p>
+        <p className="mt-3 text-sm text-slate-600">Died {formatDate(profile.death_date)}</p>
         <p className="mt-3 text-sm text-slate-600">
           Pension: <span className="font-semibold capitalize">{profile.deceased.pension_status}</span>
         </p>

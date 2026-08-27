@@ -44,6 +44,7 @@ export interface FamilyMember {
 
 export interface IntakeHouseholdProfile {
   deceased: IntakePersonProfile;
+  death_date: string;
   surviving_members: IntakePersonProfile[];
   location: { city: string; state: string };
   assets: { bescom: boolean; ration_card: boolean; property: boolean };
@@ -74,6 +75,7 @@ export interface IntakeResponse {
   conversation_id: string;
   status: "in_progress" | "complete";
   message: string;
+  input_type?: "text" | "date";
   profile: IntakeProfile | null;
 }
 
@@ -327,6 +329,9 @@ export interface DocEntry {
   source_task_id: string | null;
   extracted_fields: Record<string, unknown>;
   metadata: Record<string, unknown>;
+  file_name?: string | null;
+  mime_type?: string | null;
+  file_size?: number | null;
   superseded_by_id: string | null;
   created_at: string;
   updated_at: string;

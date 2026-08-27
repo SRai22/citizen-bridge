@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest";
 
-import type { NewBabyProfile } from "@/types/api";
+import type { FamilyMember, IntakeHouseholdProfile, NewBabyProfile } from "@/types/api";
 
 import { ApiError, confirmIntake } from "./api";
 
@@ -44,4 +44,34 @@ test("rejects a profile returned for the wrong intake category", async () => {
     new ApiError("Intake profile does not match category: new_baby"),
   );
   expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+test("marks a selected family member deceased instead of creating a duplicate", async () => {
+  const profile: IntakeHouseholdProfile = {
+    deceased: { name: "Arun Rao", relationship: "father", occupation: "retired", pension_status: "active" },
+    death_date: "2026-08-20",
+    surviving_members: [],
+    location: { city: "Bengaluru", state: "Karnataka" },
+    assets: { bescom: true, ration_card: true, property: false },
+  };
+  const father: FamilyMember = {
+    id: "family-1", name: "Arun Rao", relationship: "father", date_of_birth: null,
+    phone: null, is_deceased: false, death_date: null, source: "manual",
+    created_at: "2026-08-20T00:00:00Z", updated_at: "2026-08-20T00:00:00Z",
+  };
+  const fetchMock = vi.spyOn(globalThis, "fetch")
+    .mockResolvedValueOnce(Response.json({ profile }))
+    .mockResolvedValueOnce(Response.json({ ...father, is_deceased: true, death_date: profile.death_date }))
+    .mockResolvedValueOnce(Response.json({ case_id: "case-1" }));
+
+  await confirmIntake("conversation-1", "bereavement", father);
+
+  expect(fetchMock.mock.calls[1][0]).toBe("/api/auth/me/family/family-1");
+  expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({
+    is_deceased: true,
+    death_date: "2026-08-20",
+  });
+  expect(fetchMock.mock.calls.some(([url, init]) =>
+    url === "/api/auth/me/family" && init?.method === "POST"
+  )).toBe(false);
 });
