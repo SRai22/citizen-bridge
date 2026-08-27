@@ -9,11 +9,17 @@ from app.grpc import AIService
 from app.models import AIRequestLog, Conversation
 from app.provider import AIProvider
 from app.schemas import IntakeTurn, MarriageProfile, NewBabyProfile
+from app.service import _suggested_replies
 
 
 def test_intake_schema_requires_nullable_profile_for_openai_strict_output() -> None:
     schema = IntakeTurn.model_json_schema()
     assert set(schema["properties"]) == set(schema["required"])
+
+
+def test_intake_prompts_infer_state_for_unambiguous_indian_cities() -> None:
+    prompts = AIProvider(settings).intake_prompts.values()
+    assert all("Bangalore/Bengaluru is in Karnataka" in prompt for prompt in prompts)
 
 
 @pytest.mark.parametrize(
@@ -51,6 +57,16 @@ async def test_mock_intake_does_not_ask_for_authenticated_citizen_name(
 
 def auth(user_id) -> dict[str, str]:
     return {"Authorization": f"Bearer {user_id}"}
+
+
+def test_bereavement_pension_questions_offer_fixed_replies() -> None:
+    replies = _suggested_replies(
+        "bereavement", "What was Shekar Rai's occupation and pension status?"
+    )
+    assert "Retired with government pension" in replies
+    assert _suggested_replies(
+        "bereavement", "Who are the surviving household members and their pension statuses?"
+    ) == []
 
 
 @pytest.mark.asyncio

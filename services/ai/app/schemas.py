@@ -112,6 +112,7 @@ class ConversationResponse(BaseModel):
     message: str
     status: Literal["in_progress", "complete"]
     input_type: Literal["text", "date"] = "text"
+    suggested_replies: list[str] = Field(default_factory=list)
     profile: IntakeProfile | None = None
 
 

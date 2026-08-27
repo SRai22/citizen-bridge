@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useState } from "react";
@@ -183,7 +184,7 @@ function Brand({ compact = false, inverse = false }: { compact?: boolean; invers
       <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-teal-600 text-sm text-white">
         CB
       </span>
-      {compact ? null : <span>Citizen Bridge</span>}
+      {compact ? null : <span className={inverse ? "rounded-lg bg-white px-2 py-1" : undefined}><Image alt="JanSetu" className={inverse ? "h-7 w-auto" : "h-8 w-auto"} height={32} priority src="/citizen-bridge-logo.png" width={96} /></span>}
     </Link>
   );
 }

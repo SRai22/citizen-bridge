@@ -142,8 +142,23 @@ async def send_intake_message(
         message=turn.message,
         status=turn.status,
         input_type="date" if first_bereavement_answer and turn.status == "in_progress" else "text",
+        suggested_replies=_suggested_replies(category_id, turn.message),
         profile=turn.profile,
     )
+
+
+def _suggested_replies(category_id: str, prompt: str) -> list[str]:
+    lowered = prompt.lower()
+    if category_id == "bereavement" and "pension" in lowered and not any(
+        word in lowered for word in ("household", "members", "names", "relationships")
+    ):
+        return [
+            "Employed, no pension",
+            "Retired with government pension",
+            "Retired, no pension",
+            "Not sure",
+        ]
+    return []
 
 
 async def confirm_intake(

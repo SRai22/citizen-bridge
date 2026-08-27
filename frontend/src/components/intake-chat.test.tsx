@@ -35,13 +35,23 @@ test("asks for a newborn's birth date with a calendar", async () => {
 test("offers saved family members and asks for the death date with a calendar", async () => {
   const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
-    if (url === "/api/auth/me/family") return Response.json([{
-      id: "family-1", name: "Arun Rao", relationship: "father", date_of_birth: null,
-      phone: null, is_deceased: false, death_date: null, source: "manual",
-      created_at: "2026-08-20T00:00:00Z", updated_at: "2026-08-20T00:00:00Z",
-    }]);
+    if (url === "/api/auth/me/family") return Response.json([
+      {
+        id: "family-1", name: "Arun Rao", relationship: "father", date_of_birth: null,
+        phone: null, is_deceased: false, death_date: null, source: "manual",
+        created_at: "2026-08-20T00:00:00Z", updated_at: "2026-08-20T00:00:00Z",
+      },
+      {
+        id: "family-2", name: "Meera Rao", relationship: "mother", date_of_birth: null,
+        phone: null, is_deceased: false, death_date: null, source: "manual",
+        created_at: "2026-08-20T00:00:00Z", updated_at: "2026-08-20T00:00:00Z",
+      },
+    ]);
     if (url.endsWith("/message")) {
-      expect(JSON.parse(String(init?.body)).message).toContain("Arun Rao");
+      const sent = JSON.parse(String(init?.body)).message;
+      expect(sent).toContain("Arun Rao");
+      expect(sent).toContain("Meera Rao (mother)");
+      expect(sent).toContain("do not ask for them again");
       return Response.json({
         conversation_id: "conversation-1", status: "in_progress",
         message: "Thank you for telling me.", input_type: "date", profile: null,
@@ -58,5 +68,20 @@ test("offers saved family members and asks for the death date with a calendar", 
 
   const dateInput = await screen.findByLabelText("Date of death");
   expect(dateInput).toHaveAttribute("type", "date");
+  expect(screen.getByText("Arun Rao, my father, passed away.")).toBeInTheDocument();
+  expect(screen.queryByText(/Meera Rao \(mother\)/)).not.toBeInTheDocument();
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+});
+
+test("renders server-provided pension replies while keeping text input", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({
+    conversation_id: "conversation-1", status: "in_progress",
+    message: "What was their occupation and pension status?", input_type: "text",
+    suggested_replies: ["Retired with government pension", "Not sure"], profile: null,
+  }));
+
+  render(<IntakeChat categoryId="bereavement" />);
+
+  expect(await screen.findByRole("button", { name: "Retired with government pension" })).toBeInTheDocument();
+  expect(screen.getByLabelText("Your message")).toHaveAttribute("type", "text");
 });

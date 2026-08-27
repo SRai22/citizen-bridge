@@ -76,6 +76,7 @@ export interface IntakeResponse {
   status: "in_progress" | "complete";
   message: string;
   input_type?: "text" | "date";
+  suggested_replies?: string[];
   profile: IntakeProfile | null;
 }
 

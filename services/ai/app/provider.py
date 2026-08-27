@@ -23,6 +23,11 @@ from app.schemas import (
 )
 
 PROMPTS = Path(__file__).parent / "prompts"
+LOCATION_GUIDANCE = (
+    "Use reliable geographic knowledge to infer the state from a well-known, unambiguous "
+    "Indian city (for example, Bangalore/Bengaluru is in Karnataka). This is not guessing. "
+    "Ask for the state only when the city is missing or genuinely ambiguous."
+)
 
 MOCK_PROFILES = {
     "bereavement": BereavementProfile(
@@ -101,7 +106,10 @@ class AIProvider:
         self.settings = settings
         self.client = client
         self.intake_prompts = {
-            category_id: (PROMPTS / f"intake_{category_id}.md").read_text(encoding="utf-8")
+            category_id: (
+                (PROMPTS / f"intake_{category_id}.md").read_text(encoding="utf-8")
+                + f"\n\n{LOCATION_GUIDANCE}"
+            )
             for category_id in MOCK_PROFILES
         }
         self.rejection_prompt = (PROMPTS / "rejection_interpretation.md").read_text(

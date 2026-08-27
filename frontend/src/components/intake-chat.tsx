@@ -29,6 +29,7 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
   const [family, setFamily] = useState<FamilyMember[]>([]);
   const [selectedFamilyMember, setSelectedFamilyMember] = useState<FamilyMember | null>(null);
   const [inputType, setInputType] = useState<"text" | "date">("text");
+  const [suggestedReplies, setSuggestedReplies] = useState<string[]>([]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -39,6 +40,7 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
           { id: nextMessageId.current++, role: "system", content: response.message },
         ]);
         setInputType(response.input_type ?? "text");
+        setSuggestedReplies(response.suggested_replies ?? []);
         setStarting(false);
       })
       .catch((reason: unknown) => {
@@ -59,11 +61,11 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
     await submitMessage(message);
   }
 
-  async function submitMessage(value: string) {
+  async function submitMessage(value: string, displayValue = value) {
     const content = value.trim();
     if (!content || !sessionId || busy) return;
 
-    const userMessage = { id: nextMessageId.current++, role: "user" as const, content };
+    const userMessage = { id: nextMessageId.current++, role: "user" as const, content: displayValue };
     setMessages((current) => [...current, userMessage]);
     setMessage("");
     setError(null);
@@ -83,10 +85,11 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
       };
       setMessages((current) => [...current, systemMessage]);
       setInputType(response.input_type ?? "text");
+      setSuggestedReplies(response.suggested_replies ?? []);
       setProfile(response.profile);
     } catch (reason) {
       setMessages((current) => current.filter(({ id }) => id !== userMessage.id));
-      setMessage(content);
+      setMessage(displayValue);
       setError(messageFor(reason));
     } finally {
       setBusy(false);
@@ -185,12 +188,34 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
                 key={member.id}
                 onClick={() => {
                   setSelectedFamilyMember(member);
-                  void submitMessage(`${member.name}, my ${member.relationship}, passed away.`);
+                  const survivingFamily = family
+                    .filter(({ id }) => id !== member.id)
+                    .map(({ name, relationship }) => `${name} (${relationship})`)
+                    .join(", ");
+                  const answer = `${member.name}, my ${member.relationship}, passed away.`;
+                  const savedContext = survivingFamily
+                    ? ` My saved family profile lists these surviving household members: ${survivingFamily}. Treat their names and relationships as confirmed and do not ask for them again.`
+                    : "";
+                  void submitMessage(answer + savedContext, answer);
                 }}
                 type="button"
               >
                 <span className="block">{member.name}</span>
                 <span className="block text-xs font-normal capitalize text-slate-500">{member.relationship}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {suggestedReplies.length && !busy && !showFamilyChoices ? (
+          <div className="flex flex-wrap gap-2" aria-label="Suggested replies">
+            {suggestedReplies.map((reply) => (
+              <button
+                className="rounded-xl border border-teal-700 bg-white px-4 py-2 text-sm font-semibold text-teal-900 hover:bg-teal-50"
+                key={reply}
+                onClick={() => void submitMessage(reply)}
+                type="button"
+              >
+                {reply}
               </button>
             ))}
           </div>

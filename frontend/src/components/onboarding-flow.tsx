@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -64,7 +65,7 @@ export function OnboardingFlow() {
     <main className="min-h-screen bg-slate-950 px-4 py-6 sm:grid sm:place-items-center sm:px-8">
       <section className="mx-auto w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl shadow-black/25">
         <header className="border-b border-slate-100 px-6 py-5 sm:px-9">
-          <div className="flex items-center justify-between gap-4"><div className="flex items-center gap-3 font-bold text-slate-950"><span className="grid size-10 place-items-center rounded-xl bg-teal-600 text-sm text-white">CB</span>Citizen Bridge</div><span className="text-sm font-semibold text-slate-500">Step {step + 1} of 2</span></div>
+          <div className="flex items-center justify-between gap-4"><div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-teal-600 text-sm font-bold text-white">CB</span><Image alt="JanSetu" className="h-8 w-auto" height={32} priority src="/citizen-bridge-logo.png" width={96} /></div><span className="text-sm font-semibold text-slate-500">Step {step + 1} of 2</span></div>
           <div aria-label={`Onboarding progress: step ${step + 1} of 2`} aria-valuemax={2} aria-valuemin={1} aria-valuenow={step + 1} className="mt-5 grid grid-cols-2 gap-2" role="progressbar"><span className="h-1.5 rounded-full bg-teal-600"/><span className={`h-1.5 rounded-full ${step === 1 ? "bg-teal-600" : "bg-slate-200"}`}/></div>
         </header>
         <div className="px-6 py-8 sm:px-9 sm:py-10">
