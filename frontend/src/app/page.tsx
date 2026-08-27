@@ -4,6 +4,9 @@ import Link from "next/link";
 export default function Home() {
   return (
     <main className="min-h-screen bg-slate-950 text-white">
+      <div className="bg-amber-400 px-4 py-2 text-center text-sm font-semibold text-slate-900">
+        🚧 Demo only — all names, cases, and data shown are fictional and for illustration purposes only.
+      </div>
       <header className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8">
         <Link aria-label="Citizen Bridge home" className="flex items-center gap-3" href="/"><span className="grid size-10 place-items-center rounded-xl bg-teal-600 text-sm font-bold">CB</span><span className="rounded-lg bg-white px-2 py-1"><Image alt="JanSetu" className="h-7 w-auto" height={28} priority src="/citizen-bridge-logo.png" width={84} /></span></Link>
         <div className="flex items-center gap-2"><Link className="rounded-xl px-4 py-2.5 text-sm font-bold hover:bg-white/10" href="/login">Log in</Link><Link className="rounded-xl bg-teal-500 px-4 py-2.5 text-sm font-bold text-slate-950 hover:bg-teal-400" href="/register">Register</Link></div>
