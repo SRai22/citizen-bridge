@@ -17,7 +17,6 @@ categories:
     icon: baby
     description: Register a birth and arrange the child's essential records and services.
     services:
-      - hospital_birth_record
       - birth_certificate
       - aadhaar_enrollment
       - child_passport

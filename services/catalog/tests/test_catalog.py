@@ -99,7 +99,6 @@ async def test_catalog_grpc_api() -> None:
                 "hospital_record_uploaded": True,
             },
             {
-                "hospital_birth_record",
                 "birth_certificate",
                 "aadhaar_enrollment",
                 "child_passport",
@@ -135,7 +134,6 @@ async def test_catalog_grpc_api() -> None:
         (
             "new_baby",
             {
-                "hospital_birth_record",
                 "birth_certificate",
                 "aadhaar_enrollment",
                 "child_passport",
@@ -179,18 +177,15 @@ def test_workflow_matching_does_not_cross_categories(category_id, expected) -> N
 
 
 def test_family_workflow_dependencies_follow_the_real_sequence() -> None:
-    assert catalog.workflows["birth_certificate"].inter_workflow_dependencies == [
-        "hospital_birth_record"
-    ]
+    assert "hospital_birth_record" not in catalog.workflows
+    assert catalog.workflows["birth_certificate"].inter_workflow_dependencies == []
     assert catalog.workflows["aadhaar_enrollment"].inter_workflow_dependencies == [
         "birth_certificate"
     ]
     assert catalog.workflows["child_passport"].inter_workflow_dependencies == [
         "birth_certificate"
     ]
-    assert catalog.workflows["vaccination_registration"].inter_workflow_dependencies == [
-        "hospital_birth_record"
-    ]
+    assert catalog.workflows["vaccination_registration"].inter_workflow_dependencies == []
     for workflow_id in (
         "post_marriage_address_update",
         "post_marriage_name_update",

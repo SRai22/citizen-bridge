@@ -93,26 +93,14 @@ workflows:
     typical_duration_days: [7, 14]
 
   - &new_baby_workflow
-    id: hospital_birth_record
-    description: Upload the hospital birth report or discharge record and record birth-dose vaccinations.
-    adapter_type: hospital_birth_record
-    applicability_rules:
-      - {field: category_id, equals: new_baby}
-      - {field: hospital_record_uploaded, equals: true}
-    tasks: [{id: upload_hospital_birth_record, name: Upload Hospital Birth Record, estimated_duration_days: 1}]
-    inter_workflow_dependencies: []
-    stages: []
-    typical_duration_days: [0, 1]
-
-  - <<: *new_baby_workflow
     id: birth_certificate
-    description: Register a child's birth and obtain the official certificate.
+    description: Use the hospital record already uploaded during intake to register the birth and obtain the official certificate.
     adapter_type: birth_certificate
     applicability_rules:
       - {field: category_id, equals: new_baby}
       - {field: baby.name, exists: true}
     tasks: [{id: birth_registration, name: Register Birth, estimated_duration_days: 7}]
-    inter_workflow_dependencies: [hospital_birth_record]
+    inter_workflow_dependencies: []
     stages: *known_stages
     typical_duration_days: [3, 7]
 
@@ -141,13 +129,13 @@ workflows:
 
   - <<: *new_baby_workflow
     id: vaccination_registration
-    description: Register a child for public vaccinations.
+    description: Track ongoing vaccines after the birth doses recorded by the hospital.
     adapter_type: vaccination_registration
     applicability_rules:
       - {field: category_id, equals: new_baby}
       - {field: baby.dob, exists: true}
-    tasks: [{id: vaccination_signup, name: Register Vaccination Schedule, estimated_duration_days: 3}]
-    inter_workflow_dependencies: [hospital_birth_record]
+    tasks: [{id: vaccination_signup, name: Track Child Vaccination Schedule, estimated_duration_days: 3}]
+    inter_workflow_dependencies: []
     stages: []
     typical_duration_days: [1, 3]
 
