@@ -74,7 +74,11 @@ async def create_case(
             location_city=payload.household_profile.location_city,
             location_state=payload.household_profile.location_state,
             people=[
-                Person(**person.model_dump(exclude_none=True))
+                Person(
+                    **person.model_dump(exclude={"id", "attributes"}, exclude_none=True),
+                    attributes=person.attributes
+                    | ({"family_member_id": str(person.id)} if person.id else {}),
+                )
                 for person in payload.household_profile.people
             ],
         )

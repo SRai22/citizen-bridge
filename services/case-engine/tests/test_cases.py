@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
-from app.models import Task
+from app.models import Person, Task
 from app.service import mark_overdue_tasks
 
 
@@ -249,3 +249,27 @@ async def test_case_can_be_created_for_a_family_member(case_context) -> None:
     )
     assert forbidden.status_code == 403
     assert "As coordinator" in forbidden.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_family_member_can_be_reused_across_cases(case_context) -> None:
+    client, sessions, users, _, _ = case_context
+    user_id, family_member_id = uuid4(), uuid4()
+    users.add(user_id)
+    case_payload = payload()
+    case_payload["household_profile"]["people"][0]["id"] = str(family_member_id)
+    case_payload["subject_person_index"] = 0
+
+    first = await client.post("/api/cases", headers=headers(user_id), json=case_payload)
+    second = await client.post("/api/cases", headers=headers(user_id), json=case_payload)
+
+    assert first.status_code == second.status_code == 201
+    assert first.json()["subject"]["person_id"] != second.json()["subject"]["person_id"]
+    async with sessions() as session:
+        people = list(await session.scalars(select(Person)))
+    linked = [
+        person
+        for person in people
+        if person.attributes.get("family_member_id") == str(family_member_id)
+    ]
+    assert len(linked) == 2
