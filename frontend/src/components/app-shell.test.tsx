@@ -37,6 +37,7 @@ test("provides navigation, back action, collapse, and mobile drawer", () => {
     "page",
   );
   expect(screen.getByText("Page content")).toBeInTheDocument();
+  expect(screen.getByText("Current section:").parentElement).toHaveTextContent("My Documents");
   fireEvent.click(screen.getByRole("button", { name: "Go back" }));
   expect(back).toHaveBeenCalledOnce();
 

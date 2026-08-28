@@ -1,5 +1,15 @@
 import type { CitizenCase, RequiredDocument, Task, TaskStatus } from "@/types/api";
 
+const WORKFLOW_TITLES: Record<string, string> = {
+  bereavement: "Death in the Family",
+  new_baby: "New Baby",
+  marriage: "Marriage",
+};
+
+export function workflowTitle(categoryId: string): string {
+  return WORKFLOW_TITLES[categoryId] ?? "Service";
+}
+
 export function titleCase(value: string): string {
   return value
     .split("_")

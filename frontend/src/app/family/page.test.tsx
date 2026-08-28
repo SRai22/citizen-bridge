@@ -28,6 +28,7 @@ test("shows contextual family details and adds a member", async () => {
 
   render(<FamilyPage />);
   expect(await screen.findByRole("heading", { name: "Kamala Devi" })).toBeInTheDocument();
+  expect(screen.getByText("Pending identity and certificate verification")).toBeInTheDocument();
   expect(screen.getByText("No active cases")).toBeInTheDocument();
   fireEvent.click(screen.getByText("+ Add a family member"));
   fireEvent.change(screen.getAllByLabelText("Name").at(-1)!, { target: { value: "Arun Rao" } });

@@ -4,6 +4,7 @@ import type {
   MarriageProfile,
   NewBabyProfile,
 } from "@/types/api";
+import { workflowTitle } from "@/lib/presentation";
 
 interface ProfileSummaryProps {
   profile: IntakeProfile;
@@ -17,21 +18,23 @@ interface ProfileSummaryProps {
 export function ProfileSummary({
   profile,
   busy,
+  categoryId,
   error,
   onConfirm,
   onClarify,
 }: ProfileSummaryProps) {
+  const title = workflowTitle(categoryId ?? "");
   return (
     <section aria-labelledby="profile-summary-heading" className="p-5 sm:p-8">
       <p className="text-sm font-bold uppercase tracking-[0.16em] text-teal-700">
-        Ready to review
+        {title} workflow
       </p>
-      <h2
+      <h1
         id="profile-summary-heading"
         className="mt-2 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl"
       >
-        Here&apos;s what I understood
-      </h2>
+        Review your {title.toLocaleLowerCase()} details
+      </h1>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
         Please check these details before I create your family&apos;s service plan.
       </p>

@@ -75,13 +75,18 @@ export default function FamilyPage() {
       {members.length ? (
         <ul className="mt-8 space-y-4">
           {members.map((member) => {
-            const activeCases = cases.filter((item) => item.subject?.person_id === member.id && item.status !== "completed" && item.status !== "abandoned");
+            const linkedCases = cases.filter((item) => item.subject?.person_id === member.id);
+            const activeCases = linkedCases.filter((item) => item.status !== "completed" && item.status !== "abandoned");
+            const verified = member.source === "intake" && linkedCases.some((item) => item.status === "completed");
+            const pendingVerification = member.source === "intake" && !verified;
             return (
-              <li className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" key={member.id}>
+              <li className={`rounded-2xl border p-5 shadow-sm ${pendingVerification ? "border-amber-300 bg-amber-50" : verified ? "border-emerald-300 bg-emerald-50" : "border-slate-200 bg-white"}`} key={member.id}>
                 <div className="flex flex-col justify-between gap-3 sm:flex-row">
                   <div>
                     <h2 className="text-lg font-bold text-slate-950">{member.name}{member.is_deceased ? " (Late)" : ""}</h2>
                     <p className="mt-1 text-sm capitalize text-slate-600">{member.relationship}{member.date_of_birth ? ` · ${age(member.date_of_birth)} years` : ""}</p>
+                    {pendingVerification ? <p className="mt-2 inline-flex rounded-full bg-amber-200 px-3 py-1 text-xs font-bold text-amber-950">Pending identity and certificate verification</p> : null}
+                    {verified ? <p className="mt-2 inline-flex rounded-full bg-emerald-200 px-3 py-1 text-xs font-bold text-emerald-950">Verified through completed workflow ✓</p> : null}
                     <p className="mt-2 text-sm text-slate-600">{activeCases.length ? `Active cases: ${activeCases.length} (${activeCases.map((item) => item.title).join(", ")})` : "No active cases"}</p>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-2">

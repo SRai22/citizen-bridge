@@ -149,10 +149,47 @@ export async function confirmIntake(
     const context = "baby" in profile
       ? { category_id: categoryId, ...profile }
       : { category_id: categoryId, marriage: profile };
+    const people = "baby" in profile
+      ? await Promise.all([
+          addFamilyMember({
+            name: profile.baby.name,
+            relationship: "child",
+            date_of_birth: profile.baby.dob,
+            source: "intake",
+          }),
+          addFamilyMember({
+            name: profile.parents[1],
+            relationship: "spouse",
+            source: "intake",
+          }),
+        ])
+      : [await addFamilyMember({
+          name: profile.spouse2,
+          relationship: "spouse",
+          source: "intake",
+        })];
     return request<IntakeConfirmation>("/api/cases", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ life_event: { type: categoryId, context } }),
+      body: JSON.stringify({
+        life_event: { type: categoryId, context },
+        household_profile: {
+          location_city: profile.location.city,
+          location_state: profile.location.state,
+          people: people.map((person) => ({
+            id: person.id,
+            name: person.name,
+            relationship: person.relationship,
+            role: null,
+            is_deceased: false,
+            attributes: "baby" in profile && person.id === people[0].id
+              ? { date_of_birth: profile.baby.dob, gender: profile.baby.gender }
+              : {},
+          })),
+        },
+        subject_person_index: 0,
+        subject_relationship: people[0].relationship,
+      }),
     });
   }
 

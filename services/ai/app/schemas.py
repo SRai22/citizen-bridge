@@ -45,7 +45,7 @@ class BabyProfile(StrictModel):
 
 class NewBabyProfile(StrictModel):
     baby: BabyProfile
-    parents: list[str] = Field(min_length=1)
+    parents: list[str] = Field(min_length=2, max_length=2)
     location: Location
     birth_place: str = Field(min_length=1)
 

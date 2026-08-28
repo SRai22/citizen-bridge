@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { ProfileSummary } from "@/components/profile-summary";
 import { ApiError, confirmIntake, getFamily, sendIntakeMessage, startIntake } from "@/lib/api";
+import { workflowTitle } from "@/lib/presentation";
 import type { IntakeProfile } from "@/types/api";
 import type { FamilyMember } from "@/types/api";
 
@@ -30,6 +31,7 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
   const [selectedFamilyMember, setSelectedFamilyMember] = useState<FamilyMember | null>(null);
   const [inputType, setInputType] = useState<"text" | "date">("text");
   const [suggestedReplies, setSuggestedReplies] = useState<string[]>([]);
+  const title = workflowTitle(categoryId);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -141,10 +143,10 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
     <section aria-labelledby="intake-heading" className="flex min-h-[36rem] flex-col">
       <div className="border-b border-stone-200 px-5 py-6 sm:px-8">
         <p className="text-sm font-bold uppercase tracking-[0.16em] text-teal-700">
-          A few questions to get started
+          {title} workflow
         </p>
         <h1 id="intake-heading" className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
-          Tell us what your family needs
+          {title}: a few questions to get started
         </h1>
         <p className="mt-2 text-sm leading-6 text-slate-600">
           Take your time. Your answers help us find the right Karnataka services and next steps.

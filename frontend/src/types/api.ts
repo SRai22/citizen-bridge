@@ -56,7 +56,7 @@ export interface NewBabyProfile {
     dob: string;
     gender: "female" | "male" | "other" | "unknown";
   };
-  parents: string[];
+  parents: [string, string];
   location: { city: string; state: string };
   birth_place: string;
 }

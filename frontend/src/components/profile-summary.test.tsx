@@ -16,6 +16,7 @@ test("renders a baby profile without bereavement assets", () => {
   render(
     <ProfileSummary
       busy={false}
+      categoryId="new_baby"
       error={null}
       onClarify={vi.fn()}
       onConfirm={vi.fn()}
@@ -26,5 +27,6 @@ test("renders a baby profile without bereavement assets", () => {
   expect(screen.getByText("Anaya Rao")).toBeInTheDocument();
   expect(screen.getByText("Asha Rao and Vikram Rao")).toBeInTheDocument();
   expect(screen.getByText("Bengaluru General Hospital")).toBeInTheDocument();
+  expect(screen.getByText("New Baby workflow")).toBeInTheDocument();
   expect(screen.queryByText("BESCOM connection")).not.toBeInTheDocument();
 });

@@ -17,6 +17,16 @@ const serviceGroups = [
 ] as const;
 
 const DEMO_INTAKE_CATEGORIES = new Set(["bereavement", "new_baby", "marriage"]);
+const CATEGORY_ORDER = [
+  "new_baby",
+  "education",
+  "marriage",
+  "address_change",
+  "retirement",
+  "property",
+  "senior_services",
+  "bereavement",
+];
 
 export function ServicesHome() {
   const router = useRouter();
@@ -64,12 +74,17 @@ export function ServicesHome() {
 
   const visibleCategories = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
-    if (!needle) return categories;
-    return categories.filter((category) =>
+    const matches = needle ? categories.filter((category) =>
       `${category.title} ${category.subtitle} ${category.description}`
         .toLocaleLowerCase()
         .includes(needle),
-    );
+    ) : categories;
+    return [...matches].sort((a, b) => {
+      const aOrder = CATEGORY_ORDER.indexOf(a.id);
+      const bOrder = CATEGORY_ORDER.indexOf(b.id);
+      return (aOrder < 0 ? CATEGORY_ORDER.length : aOrder)
+        - (bOrder < 0 ? CATEGORY_ORDER.length : bOrder);
+    });
   }, [categories, query]);
 
   if (error) {

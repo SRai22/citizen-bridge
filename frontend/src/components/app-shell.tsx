@@ -23,6 +23,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const currentSection = navigation.find((item) =>
+    item.href === "/life-events"
+      ? pathname.startsWith("/life-events") || pathname.startsWith("/case/")
+      : pathname.startsWith(item.href),
+  )?.label;
 
   if (["/", "/login", "/register", "/onboarding"].includes(pathname) || pathname.endsWith("/review")) return children;
 
@@ -44,6 +49,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
           {pathname !== "/" ? <button aria-label="Go back" className="rounded-xl px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100" onClick={() => router.back()} type="button">← Back</button> : null}
           <div className="md:hidden"><Brand compact /></div>
+          {currentSection ? <p className="min-w-0 truncate text-xs text-slate-500 sm:text-sm"><span className="hidden sm:inline">Current section: </span><span className="font-bold text-slate-900">{currentSection}</span></p> : null}
           <Link className="ml-auto rounded-xl px-3 py-2 text-sm font-bold text-teal-800 hover:bg-teal-50" href="/profile">My Profile</Link>
         </header>
         <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-9">{children}</main>

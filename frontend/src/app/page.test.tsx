@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
 import { ServicesHome } from "@/components/services-home";
@@ -47,12 +47,28 @@ test("loads the signed-in user's service categories and starts intake", async ()
       return Promise.resolve(Response.json({
         categories: [
           {
+            id: "address_change", title: "Moving to a New Address", subtitle: "Utilities",
+            icon: "home", description: "Update records.", service_count: 4,
+          },
+          {
             id: "bereavement",
             title: "Someone Passed Away",
             subtitle: "Death certificate, pension, utilities",
             icon: "dove",
             description: "Build a plan.",
             service_count: 3,
+          },
+          {
+            id: "marriage", title: "Marriage", subtitle: "Marriage certificate",
+            icon: "rings", description: "Register a marriage.", service_count: 1,
+          },
+          {
+            id: "education", title: "Education", subtitle: "Scholarships and admissions",
+            icon: "education", description: "Find scholarships.", service_count: 1,
+          },
+          {
+            id: "new_baby", title: "New Baby in the Family", subtitle: "Birth certificate",
+            icon: "baby", description: "Register a birth.", service_count: 3,
           },
         ],
       }));
@@ -78,6 +94,13 @@ test("loads the signed-in user's service categories and starts intake", async ()
 
   expect(screen.getByRole("status")).toHaveTextContent("Loading your services");
   expect(await screen.findByRole("heading", { name: "Welcome, Asha Rao" })).toBeInTheDocument();
+  expect(within(document.querySelector("#service-options")!).getAllByRole("button").map((button) => button.textContent)).toEqual([
+    expect.stringContaining("New Baby"),
+    expect.stringContaining("Education"),
+    expect.stringContaining("Marriage"),
+    expect.stringContaining("Moving to a New Address"),
+    expect.stringContaining("Someone Passed Away"),
+  ]);
   fireEvent.click(screen.getByRole("button", { name: /Someone Passed Away/ }));
   expect(screen.getByRole("heading", { name: "Someone Passed Away" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /Start conversation/ }));
