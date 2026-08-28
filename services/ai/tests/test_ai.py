@@ -41,7 +41,7 @@ def test_mock_intake_adapts_to_the_citizens_style(message: str, expected: str) -
     ("category_id", "user_turns", "expected"),
     [
         ("new_baby", 2, "other parent's name"),
-        ("marriage", 1, "your spouse's name"),
+        ("marriage", 1, "marriage date and place"),
     ],
 )
 @pytest.mark.asyncio
@@ -53,6 +53,26 @@ async def test_mock_intake_does_not_ask_for_authenticated_citizen_name(
         category_id,
     )
     assert expected in result.value.message.lower()
+
+
+@pytest.mark.asyncio
+async def test_mock_new_baby_flow_acknowledges_hospital_record() -> None:
+    provider = AIProvider(settings)
+    messages = [{"role": "user", "content": "answer"}] * 3 + [
+        {"role": "user", "content": "I uploaded the hospital birth record: record.pdf"}
+    ]
+    acknowledged = await provider.intake(messages, "new_baby")
+    assert "thank you for uploading the certificate from the hospital" in (
+        acknowledged.value.message.lower()
+    )
+    assert acknowledged.value.profile is None
+
+    complete = await provider.intake(
+        [*messages, {"role": "user", "content": "Vani Vilas Hospital, Bengaluru"}],
+        "new_baby",
+    )
+    assert complete.value.status == "complete"
+    assert complete.value.profile.hospital_record_uploaded is True
 
 
 def auth(user_id) -> dict[str, str]:
@@ -67,6 +87,19 @@ def test_bereavement_pension_questions_offer_fixed_replies() -> None:
     assert _suggested_replies(
         "bereavement", "Who are the surviving household members and their pension statuses?"
     ) == []
+
+
+def test_marriage_options_offer_clear_replies() -> None:
+    replies = _suggested_replies(
+        "marriage",
+        "Would either spouse like help changing their address or name, or being added to a ration card?",
+    )
+    assert replies == [
+        "No changes needed",
+        "Change address",
+        "Change name",
+        "Add spouse to ration card",
+    ]
 
 
 @pytest.mark.asyncio
@@ -172,7 +205,7 @@ async def test_mock_intake_routes_profile_by_category(
     )
     conversation_id = started.json()["conversation_id"]
 
-    for turn in range(4):
+    for turn in range(5 if category_id == "new_baby" else 4):
         response = await client.post(
             f"/api/ai/intake/{conversation_id}/message",
             json={"message": f"answer {turn}"},

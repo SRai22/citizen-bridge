@@ -93,6 +93,18 @@ workflows:
     typical_duration_days: [7, 14]
 
   - &new_baby_workflow
+    id: hospital_birth_record
+    description: Upload the hospital birth report or discharge record and record birth-dose vaccinations.
+    adapter_type: hospital_birth_record
+    applicability_rules:
+      - {field: category_id, equals: new_baby}
+      - {field: hospital_record_uploaded, equals: true}
+    tasks: [{id: upload_hospital_birth_record, name: Upload Hospital Birth Record, estimated_duration_days: 1}]
+    inter_workflow_dependencies: []
+    stages: []
+    typical_duration_days: [0, 1]
+
+  - <<: *new_baby_workflow
     id: birth_certificate
     description: Register a child's birth and obtain the official certificate.
     adapter_type: birth_certificate
@@ -100,7 +112,7 @@ workflows:
       - {field: category_id, equals: new_baby}
       - {field: baby.name, exists: true}
     tasks: [{id: birth_registration, name: Register Birth, estimated_duration_days: 7}]
-    inter_workflow_dependencies: []
+    inter_workflow_dependencies: [hospital_birth_record]
     stages: *known_stages
     typical_duration_days: [3, 7]
 
@@ -116,6 +128,18 @@ workflows:
     typical_duration_days: [15, 30]
 
   - <<: *new_baby_workflow
+    id: child_passport
+    description: Apply for the child's first passport with the birth certificate and parent or guardian declarations.
+    adapter_type: child_passport
+    applicability_rules:
+      - {field: category_id, equals: new_baby}
+      - {field: baby.dob, exists: true}
+    tasks: [{id: child_passport_application, name: Apply for Child Passport, estimated_duration_days: 30}]
+    inter_workflow_dependencies: [birth_certificate]
+    stages: *known_stages
+    typical_duration_days: [7, 30]
+
+  - <<: *new_baby_workflow
     id: vaccination_registration
     description: Register a child for public vaccinations.
     adapter_type: vaccination_registration
@@ -123,7 +147,7 @@ workflows:
       - {field: category_id, equals: new_baby}
       - {field: baby.dob, exists: true}
     tasks: [{id: vaccination_signup, name: Register Vaccination Schedule, estimated_duration_days: 3}]
-    inter_workflow_dependencies: [birth_certificate]
+    inter_workflow_dependencies: [hospital_birth_record]
     stages: []
     typical_duration_days: [1, 3]
 
@@ -187,15 +211,46 @@ workflows:
 
   - &marriage_workflow
     id: marriage_certificate
-    description: Register a marriage and obtain the official certificate.
+    description: Complete registration with the Karnataka Sub-Registrar under the applicable marriage law and obtain the certificate.
     adapter_type: marriage_certificate
     applicability_rules:
       - {field: category_id, equals: marriage}
       - {field: marriage.spouse1, exists: true}
-    tasks: [{id: marriage_registration, name: Register Marriage, estimated_duration_days: 30}]
+    tasks: [{id: marriage_registration, name: Register Marriage and Obtain Certificate, estimated_duration_days: 30}]
     inter_workflow_dependencies: []
     stages: *known_stages
     typical_duration_days: [7, 30]
+
+  - <<: *marriage_workflow
+    id: post_marriage_address_update
+    description: Update address records for a spouse who chooses to move after marriage.
+    adapter_type: post_marriage_address_update
+    applicability_rules:
+      - {field: category_id, equals: marriage}
+      - {field: marriage.change_address, equals: true}
+    tasks: [{id: update_address_records, name: Update Address Records, estimated_duration_days: 30}]
+    inter_workflow_dependencies: [marriage_certificate]
+
+  - <<: *marriage_workflow
+    id: post_marriage_name_update
+    description: Update identity records for a spouse who chooses to change their name.
+    adapter_type: post_marriage_name_update
+    applicability_rules:
+      - {field: category_id, equals: marriage}
+      - {field: marriage.change_name, equals: true}
+    tasks: [{id: update_name_records, name: Update Name Records, estimated_duration_days: 30}]
+    inter_workflow_dependencies: [marriage_certificate]
+
+  - <<: *marriage_workflow
+    id: ration_card_spouse_addition
+    description: Add a spouse to the selected Karnataka household ration card.
+    adapter_type: ration_card_spouse_addition
+    applicability_rules:
+      - {field: category_id, equals: marriage}
+      - {field: marriage.add_to_ration_card, equals: true}
+    tasks: [{id: add_spouse_to_ration_card, name: Add Spouse to Ration Card, estimated_duration_days: 30}]
+    inter_workflow_dependencies: [marriage_certificate]
+    stages: []
 
   - <<: *marriage_workflow
     id: property_mutation

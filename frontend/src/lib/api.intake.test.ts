@@ -12,6 +12,7 @@ test("creates baby cases with baby workflow context and no BESCOM data", async (
     parents: ["Asha Rao", "Vikram Rao"],
     birth_place: "Bengaluru General Hospital",
     location: { city: "Bengaluru", state: "Karnataka" },
+    hospital_record_uploaded: true,
   };
   const fetchMock = vi.spyOn(globalThis, "fetch")
     .mockResolvedValueOnce(Response.json({ profile }))
@@ -58,6 +59,9 @@ test("adds the named partner as a pending spouse before creating a marriage case
     marriage_date: "2026-08-20",
     marriage_place: "Bengaluru",
     location: { city: "Bengaluru", state: "Karnataka" },
+    change_address: true,
+    change_name: false,
+    add_to_ration_card: true,
   };
   const fetchMock = vi.spyOn(globalThis, "fetch")
     .mockResolvedValueOnce(Response.json({ profile }))
@@ -88,6 +92,9 @@ test("rejects a profile returned for the wrong intake category", async () => {
       marriage_date: "2026-08-20",
       marriage_place: "Bengaluru",
       location: { city: "Bengaluru", state: "Karnataka" },
+      change_address: false,
+      change_name: false,
+      add_to_ration_card: false,
     },
   }));
 

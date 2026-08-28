@@ -32,6 +32,34 @@ test("asks for a newborn's birth date with a calendar", async () => {
   expect(dateInput).toHaveAttribute("max", localToday);
 });
 
+test("mocks the hospital birth-record upload and acknowledges it", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    if (String(input).endsWith("/message")) {
+      expect(JSON.parse(String(init?.body)).message).toContain("hospital-record.pdf");
+      return Response.json({
+        conversation_id: "conversation-1",
+        status: "in_progress",
+        message: "Thank you for uploading the certificate from the hospital. What is the other parent's name?",
+        profile: null,
+      });
+    }
+    return Response.json({
+      conversation_id: "conversation-1",
+      status: "in_progress",
+      message: "Please upload the hospital birth report or discharge summary so we can prepare the civil birth registration.",
+      profile: null,
+    });
+  });
+
+  render(<IntakeChat categoryId="new_baby" />);
+  const upload = await screen.findByLabelText("Upload hospital birth record");
+  fireEvent.change(upload, { target: { files: [new File(["record"], "hospital-record.pdf", { type: "application/pdf" })] } });
+
+  expect(await screen.findByText("Uploaded hospital-record.pdf")).toBeInTheDocument();
+  expect(await screen.findByText(/Thank you for uploading the certificate from the hospital/)).toBeInTheDocument();
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
 test("offers saved family members and asks for the death date with a calendar", async () => {
   const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);

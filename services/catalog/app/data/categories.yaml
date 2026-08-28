@@ -13,12 +13,14 @@ categories:
 
   - id: new_baby
     title: New Baby in the Family
-    subtitle: Birth certificate, Aadhaar, vaccination
+    subtitle: Hospital record, birth certificate, Aadhaar, passport, vaccines
     icon: baby
     description: Register a birth and arrange the child's essential records and services.
     services:
+      - hospital_birth_record
       - birth_certificate
       - aadhaar_enrollment
+      - child_passport
       - vaccination_registration
 
   - id: address_change
@@ -44,10 +46,14 @@ categories:
 
   - id: marriage
     title: Marriage
-    subtitle: Marriage certificate, name change, joint accounts
+    subtitle: Marriage certificate, optional name, address, and ration-card updates
     icon: rings
     description: Register a marriage and coordinate related record changes.
-    services: [marriage_certificate]
+    services:
+      - marriage_certificate
+      - post_marriage_address_update
+      - post_marriage_name_update
+      - ration_card_spouse_addition
 
   - id: property
     title: Property or Land

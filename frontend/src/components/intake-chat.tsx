@@ -133,6 +133,8 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
 
   const needsBirthDate = categoryId === "new_baby" && !messages.some(({ role }) => role === "user");
   const needsDeathDate = categoryId === "bereavement" && inputType === "date";
+  const needsHospitalRecord = categoryId === "new_baby"
+    && /upload the hospital birth report|upload the hospital.*discharge/i.test(messages[messages.length - 1]?.content ?? "");
   const needsDate = needsBirthDate || needsDeathDate;
   const latestDate = needsDate ? localDateValue(new Date()) : undefined;
   const showFamilyChoices = categoryId === "bereavement"
@@ -238,27 +240,45 @@ export function IntakeChat({ categoryId }: { categoryId: string }) {
 
       <form className="border-t border-stone-200 bg-white p-4 sm:p-6" onSubmit={handleSubmit}>
         <div className="flex gap-3">
-          <label className="sr-only" htmlFor="intake-message">
-            {needsBirthDate ? "Baby's date of birth" : needsDeathDate ? "Date of death" : "Your message"}
-          </label>
-          <input
-            autoComplete="off"
-            className="min-w-0 flex-1 rounded-xl border border-stone-300 bg-white px-4 py-3 text-base outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-stone-100"
-            disabled={!sessionId || starting || busy}
-            id="intake-message"
-            max={latestDate}
-            onChange={(event) => setMessage(event.target.value)}
-            placeholder={needsDate ? undefined : "Type your answer…"}
-            type={needsDate ? "date" : "text"}
-            value={message}
-          />
-          <button
-            className="rounded-xl bg-teal-800 px-5 py-3 text-sm font-bold text-white transition hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!message.trim() || !sessionId || starting || busy}
-            type="submit"
-          >
-            Send
-          </button>
+          {needsHospitalRecord ? (
+            <label className="flex min-h-12 flex-1 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-teal-500 bg-teal-50 px-4 py-3 text-sm font-bold text-teal-900 hover:bg-teal-100">
+              Upload hospital birth record
+              <input
+                accept=".pdf,image/*"
+                className="sr-only"
+                disabled={!sessionId || starting || busy}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void submitMessage(`I uploaded the hospital birth record: ${file.name}`, `Uploaded ${file.name}`);
+                }}
+                type="file"
+              />
+            </label>
+          ) : (
+            <>
+              <label className="sr-only" htmlFor="intake-message">
+                {needsBirthDate ? "Baby's date of birth" : needsDeathDate ? "Date of death" : "Your message"}
+              </label>
+              <input
+                autoComplete="off"
+                className="min-w-0 flex-1 rounded-xl border border-stone-300 bg-white px-4 py-3 text-base outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:bg-stone-100"
+                disabled={!sessionId || starting || busy}
+                id="intake-message"
+                max={latestDate}
+                onChange={(event) => setMessage(event.target.value)}
+                placeholder={needsDate ? undefined : "Type your answer…"}
+                type={needsDate ? "date" : "text"}
+                value={message}
+              />
+              <button
+                className="rounded-xl bg-teal-800 px-5 py-3 text-sm font-bold text-white transition hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!message.trim() || !sessionId || starting || busy}
+                type="submit"
+              >
+                Send
+              </button>
+            </>
+          )}
         </div>
         {!starting && !sessionId ? (
           <button

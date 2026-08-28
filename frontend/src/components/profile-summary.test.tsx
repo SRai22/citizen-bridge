@@ -11,6 +11,7 @@ test("renders a baby profile without bereavement assets", () => {
     parents: ["Asha Rao", "Vikram Rao"],
     birth_place: "Bengaluru General Hospital",
     location: { city: "Bengaluru", state: "Karnataka" },
+    hospital_record_uploaded: true,
   };
 
   render(
@@ -28,5 +29,6 @@ test("renders a baby profile without bereavement assets", () => {
   expect(screen.getByText("Asha Rao and Vikram Rao")).toBeInTheDocument();
   expect(screen.getByText("Bengaluru General Hospital")).toBeInTheDocument();
   expect(screen.getByText("New Baby workflow")).toBeInTheDocument();
+  expect(screen.getByText("Uploaded ✓")).toBeInTheDocument();
   expect(screen.queryByText("BESCOM connection")).not.toBeInTheDocument();
 });

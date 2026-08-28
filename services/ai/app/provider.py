@@ -54,6 +54,7 @@ MOCK_PROFILES = {
         parents=["Meera Rao", "Kiran Rao"],
         location=Location(city="Bengaluru", state="Karnataka"),
         birth_place="Vani Vilas Hospital",
+        hospital_record_uploaded=True,
     ),
     "marriage": MarriageProfile(
         spouse1="Meera Rao",
@@ -61,6 +62,9 @@ MOCK_PROFILES = {
         marriage_date="2026-08-15",
         marriage_place="Bengaluru Registrar Office",
         location=Location(city="Bengaluru", state="Karnataka"),
+        change_address=True,
+        change_name=False,
+        add_to_ration_card=True,
     ),
 }
 MOCK_QUESTIONS = {
@@ -74,11 +78,12 @@ MOCK_QUESTIONS = {
     "new_baby": (
         "What is the baby's name and gender?",
         "What is the other parent's name?",
-        "Where was the baby born, and which city and state does the family live in?",
+        "Please upload the hospital birth report or discharge summary so we can prepare the civil birth registration.",
+        "Which hospital was the baby born in, and which city and state does the family live in?",
     ),
     "marriage": (
-        "What is your spouse's name?",
         "What was the marriage date and place?",
+        "After registration, would either spouse like help changing their address or name, or being added to a ration card?",
         "Which city and state do the spouses live in?",
     ),
 }
@@ -137,7 +142,7 @@ class AIProvider:
                     message="I have everything I need. Here's a summary of what we'll handle:",
                     profile=MOCK_PROFILES[category_id],
                 )
-                if user_turns >= 4
+                if user_turns >= (5 if category_id == "new_baby" else 4)
                 else IntakeTurn(
                     status="in_progress",
                     message=self._mock_reply(
@@ -165,6 +170,8 @@ class AIProvider:
     @staticmethod
     def _mock_reply(message: str, question: str) -> str:
         lowered = message.lower()
+        if "uploaded the hospital birth record" in lowered:
+            return f"Thank you for uploading the certificate from the hospital. {question}"
         if "just tell me" in lowered or "stop asking" in lowered:
             return f"Understood — I'll keep this direct. {question}"
         if "?" in message or lowered.startswith("why"):

@@ -59,6 +59,7 @@ export interface NewBabyProfile {
   parents: [string, string];
   location: { city: string; state: string };
   birth_place: string;
+  hospital_record_uploaded: true;
 }
 
 export interface MarriageProfile {
@@ -67,6 +68,9 @@ export interface MarriageProfile {
   marriage_date: string;
   marriage_place: string;
   location: { city: string; state: string };
+  change_address: boolean;
+  change_name: boolean;
+  add_to_ration_card: boolean;
 }
 
 export type IntakeProfile = IntakeHouseholdProfile | NewBabyProfile | MarriageProfile;

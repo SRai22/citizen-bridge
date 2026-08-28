@@ -155,6 +155,11 @@ function BabyDetails({ profile }: { profile: NewBabyProfile }) {
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-stone-500">Parents</p>
         <p className="mt-2 font-bold text-slate-950">{profile.parents.join(" and ")}</p>
       </article>
+      <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 sm:col-span-2">
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-700">Hospital record</p>
+        <p className="mt-2 font-bold text-emerald-950">{profile.hospital_record_uploaded ? "Uploaded ✓" : "Still needed"}</p>
+        <p className="mt-2 text-sm text-emerald-900">We’ll use this for civil birth registration and keep the hospital vaccination record with the child’s plan.</p>
+      </article>
     </>
   );
 }
@@ -171,6 +176,14 @@ function MarriageDetails({ profile }: { profile: MarriageProfile }) {
         <p className="mt-3 text-sm text-slate-600">
           Marriage place: <span className="font-semibold">{profile.marriage_place}</span>
         </p>
+      </article>
+      <article className="rounded-2xl border border-stone-200 bg-stone-50 p-5">
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-stone-500">Optional next steps</p>
+        <ul className="mt-2 space-y-1 text-sm text-slate-700">
+          <li>{profile.change_address ? "✓" : "—"} Address change</li>
+          <li>{profile.change_name ? "✓" : "—"} Name change</li>
+          <li>{profile.add_to_ration_card ? "✓" : "—"} Add spouse to ration card</li>
+        </ul>
       </article>
     </>
   );

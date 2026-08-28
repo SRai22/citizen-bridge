@@ -96,12 +96,31 @@ async def test_catalog_grpc_api() -> None:
             {
                 "category_id": "new_baby",
                 "baby": {"name": "Anaya Rao", "dob": "2026-08-20"},
+                "hospital_record_uploaded": True,
             },
-            {"birth_certificate", "aadhaar_enrollment", "vaccination_registration"},
+            {
+                "hospital_birth_record",
+                "birth_certificate",
+                "aadhaar_enrollment",
+                "child_passport",
+                "vaccination_registration",
+            },
         ),
         (
-            {"category_id": "marriage", "marriage": {"spouse1": "Meera Rao"}},
-            {"marriage_certificate"},
+            {
+                "category_id": "marriage",
+                "marriage": {
+                    "spouse1": "Meera Rao",
+                    "change_address": True,
+                    "change_name": False,
+                    "add_to_ration_card": True,
+                },
+            },
+            {
+                "marriage_certificate",
+                "post_marriage_address_update",
+                "ration_card_spouse_addition",
+            },
         ),
     ):
         result = await servicer.ListApplicableWorkflows(
@@ -113,8 +132,24 @@ async def test_catalog_grpc_api() -> None:
 @pytest.mark.parametrize(
     ("category_id", "expected"),
     [
-        ("new_baby", {"birth_certificate", "aadhaar_enrollment", "vaccination_registration"}),
-        ("marriage", {"marriage_certificate"}),
+        (
+            "new_baby",
+            {
+                "hospital_birth_record",
+                "birth_certificate",
+                "aadhaar_enrollment",
+                "child_passport",
+                "vaccination_registration",
+            },
+        ),
+        (
+            "marriage",
+            {
+                "marriage_certificate",
+                "post_marriage_address_update",
+                "ration_card_spouse_addition",
+            },
+        ),
         ("bereavement", {"death_certificate", "family_pension", "bescom_transfer", "ration_card"}),
     ],
 )
@@ -122,7 +157,13 @@ def test_workflow_matching_does_not_cross_categories(category_id, expected) -> N
     mixed_profile = {
         "category_id": category_id,
         "baby": {"name": "Anaya Rao", "dob": "2026-08-20"},
-        "marriage": {"spouse1": "Meera Rao"},
+        "hospital_record_uploaded": True,
+        "marriage": {
+            "spouse1": "Meera Rao",
+            "change_address": True,
+            "change_name": False,
+            "add_to_ration_card": True,
+        },
         "deceased": {
             "is_deceased": True,
             "pension_status": "active",
@@ -135,3 +176,26 @@ def test_workflow_matching_does_not_cross_categories(category_id, expected) -> N
     }
 
     assert {workflow.id for workflow in catalog.applicable_workflows(mixed_profile)} == expected
+
+
+def test_family_workflow_dependencies_follow_the_real_sequence() -> None:
+    assert catalog.workflows["birth_certificate"].inter_workflow_dependencies == [
+        "hospital_birth_record"
+    ]
+    assert catalog.workflows["aadhaar_enrollment"].inter_workflow_dependencies == [
+        "birth_certificate"
+    ]
+    assert catalog.workflows["child_passport"].inter_workflow_dependencies == [
+        "birth_certificate"
+    ]
+    assert catalog.workflows["vaccination_registration"].inter_workflow_dependencies == [
+        "hospital_birth_record"
+    ]
+    for workflow_id in (
+        "post_marriage_address_update",
+        "post_marriage_name_update",
+        "ration_card_spouse_addition",
+    ):
+        assert catalog.workflows[workflow_id].inter_workflow_dependencies == [
+            "marriage_certificate"
+        ]

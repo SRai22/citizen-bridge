@@ -48,6 +48,7 @@ class NewBabyProfile(StrictModel):
     parents: list[str] = Field(min_length=2, max_length=2)
     location: Location
     birth_place: str = Field(min_length=1)
+    hospital_record_uploaded: Literal[True]
 
 
 class MarriageProfile(StrictModel):
@@ -56,6 +57,9 @@ class MarriageProfile(StrictModel):
     marriage_date: date
     marriage_place: str = Field(min_length=1)
     location: Location
+    change_address: bool
+    change_name: bool
+    add_to_ration_card: bool
 
 
 IntakeProfile = BereavementProfile | NewBabyProfile | MarriageProfile

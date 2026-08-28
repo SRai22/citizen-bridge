@@ -98,7 +98,7 @@ OPENING_MESSAGES = {
     "new_baby": "Congratulations! When was the baby born?",
     "address_change": "When did you move, and which records or utilities need the new address?",
     "retirement": "Are you retiring or did you recently lose your job?",
-    "marriage": "Congratulations! When and where did the marriage take place?",
+    "marriage": "Congratulations! What is your spouse's full name?",
     "property": "What property or land matter would you like help with?",
     "education": "Who is the student, and what education service do they need?",
     "senior_services": "Which senior citizen service would you like help arranging?",
@@ -157,6 +157,13 @@ def _suggested_replies(category_id: str, prompt: str) -> list[str]:
             "Retired with government pension",
             "Retired, no pension",
             "Not sure",
+        ]
+    if category_id == "marriage" and "changing their address or name" in lowered:
+        return [
+            "No changes needed",
+            "Change address",
+            "Change name",
+            "Add spouse to ration card",
         ]
     return []
 

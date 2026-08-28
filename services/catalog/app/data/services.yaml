@@ -72,6 +72,17 @@ services:
     required_profile_fields: [name, city]
     workflow_id: legal_heir_certificate
 
+  - id: hospital_birth_record
+    name: Hospital Birth Record
+    authority: Maternity Hospital / Birth Reporting Unit
+    category: health
+    description: Upload the hospital birth report or discharge record used for civil birth registration.
+    typical_wait_days: [0, 1]
+    stages_known: false
+    stages: []
+    required_profile_fields: [name, dob, city]
+    workflow_id: hospital_birth_record
+
   - id: birth_certificate
     name: Birth Certificate
     authority: Municipal Registrar of Births and Deaths
@@ -93,6 +104,17 @@ services:
     stages: *known_stages
     required_profile_fields: [name, dob, city]
     workflow_id: aadhaar_enrollment
+
+  - id: child_passport
+    name: Child Passport
+    authority: Passport Seva, Ministry of External Affairs
+    category: identity
+    description: Apply for a minor passport using the child's birth certificate and parent or guardian declarations.
+    typical_wait_days: [7, 30]
+    stages_known: true
+    stages: *known_stages
+    required_profile_fields: [name, dob, city]
+    workflow_id: child_passport
 
   - id: vaccination_registration
     name: Vaccination Registration
@@ -184,14 +206,47 @@ services:
 
   - id: marriage_certificate
     name: Marriage Certificate
-    authority: Department of Stamps and Registration
+    authority: Karnataka Department of Stamps and Registration
     category: certificates
-    description: Register a marriage and obtain the official certificate.
+    description: Complete registration under the applicable marriage law and obtain the official certificate.
     typical_wait_days: [7, 30]
     stages_known: true
     stages: *known_stages
     required_profile_fields: [name, city]
     workflow_id: marriage_certificate
+
+  - id: post_marriage_address_update
+    name: Post-marriage Address Updates
+    authority: UIDAI and relevant record authorities
+    category: identity
+    description: Update the address only for a spouse who chooses to move after marriage.
+    typical_wait_days: [7, 30]
+    stages_known: true
+    stages: *known_stages
+    required_profile_fields: [name, city]
+    workflow_id: post_marriage_address_update
+
+  - id: post_marriage_name_update
+    name: Post-marriage Name Updates
+    authority: UIDAI and relevant identity authorities
+    category: identity
+    description: Update identity records only when a spouse chooses to change their name after marriage.
+    typical_wait_days: [7, 30]
+    stages_known: true
+    stages: *known_stages
+    required_profile_fields: [name, city]
+    workflow_id: post_marriage_name_update
+
+  - id: ration_card_spouse_addition
+    name: Add Spouse to Ration Card
+    authority: Karnataka Food and Civil Supplies Department
+    category: benefits
+    description: Add a spouse to the chosen household ration card after marriage registration.
+    typical_wait_days: [7, 30]
+    stages_known: false
+    stages: []
+    required_profile_fields: [name, city]
+    workflow_id: ration_card_spouse_addition
 
   - id: property_mutation
     name: Property Mutation
